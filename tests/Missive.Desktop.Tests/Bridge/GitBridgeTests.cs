@@ -51,6 +51,11 @@ public sealed class GitBridgeTests : IDisposable
             .AddTransient<GetCommit>()
             .AddTransient<GetCommitFile>()
             .AddTransient<GetFileDiff>()
+            .AddTransient<ListBranches>()
+            .AddTransient<SwitchBranch>()
+            .AddTransient<CreateBranch>()
+            .AddTransient<CheckoutRemoteBranch>()
+            .AddTransient<DeleteBranch>()
             .AddTransient<ListRemotes>()
             .AddTransient<AddRemote>()
             .AddTransient<UpdateRemote>()
@@ -423,6 +428,48 @@ public sealed class GitBridgeTests : IDisposable
 
         Assert.Equal(GitErrors.RemoteNotFoundCode, ErrorCode(update));
         Assert.Equal(GitErrors.RemoteNotFoundCode, ErrorCode(remove));
+    }
+
+    [Fact]
+    public async Task GitBranchList_ReturnsBranchesWithTheLocalBranchTrackingEachRemoteOne()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", "origin/main", 0, 0, false, [])));
+        _git.ListBranchesAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<GitBranch>>.Success([
+            new GitBranch("main", null, true, "origin/main", "a1", null, "Init"),
+            new GitBranch("origin/main", "origin", false, null, "a1", null, "Init"),
+            new GitBranch("origin/feature/x", "origin", false, null, "b2", null, "X"),
+        ]));
+
+        var response = await SendAsync("git.branch.list");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        var payload = response.GetProperty("payload");
+        Assert.Equal("main", payload.GetProperty("status").GetProperty("branch").GetString());
+        var branches = payload.GetProperty("branches");
+        Assert.True(branches[0].GetProperty("current").GetBoolean());
+        Assert.Equal("main", branches[1].GetProperty("trackedBy").GetString());
+        Assert.Equal("feature/x", branches[2].GetProperty("localName").GetString());
+        Assert.Equal(JsonValueKind.Null, branches[2].GetProperty("trackedBy").ValueKind);
+    }
+
+    [Fact]
+    public async Task GitBranchDelete_PassesForce()
+    {
+        _current.Open(Folder);
+        _git.GetStatusAsync(Folder, Arg.Any<CancellationToken>())
+            .Returns(Result<GitStatus>.Success(new GitStatus("main", null, 0, 0, false, [])));
+        _git.ListBranchesAsync(Folder, Arg.Any<CancellationToken>()).Returns(Result<IReadOnlyList<GitBranch>>.Success([
+            new GitBranch("main", null, true, null, "a1", null, "Init"),
+            new GitBranch("old", null, false, null, "b2", null, "Old"),
+        ]));
+        _git.DeleteBranchAsync(default!, default!, default).ReturnsForAnyArgs(Result<Unit>.Success(Unit.Value));
+
+        var response = await SendAsync("git.branch.delete", """{ "name": "old", "force": true }""");
+
+        Assert.True(response.GetProperty("ok").GetBoolean(), response.ToString());
+        await _git.Received(1).DeleteBranchAsync(Folder, "old", true, Arg.Any<CancellationToken>());
     }
 
     private async Task<JsonElement> SendAsync(string type, string? payload = null)

@@ -29,10 +29,11 @@ import { GitOperation, GitStore } from '../../../../services/git-store';
 import { WorkspaceStore } from '../../../../services/workspace-store';
 import { GitHistoryList } from '../git-history-list/git-history-list';
 import { GitRemotes } from '../git-remotes/git-remotes';
+import { GitBranches } from '../git-branches/git-branches';
 
 @Component({
   selector: 'app-git-view',
-  imports: [FaIconComponent, GitHistoryList, GitRemotes],
+  imports: [FaIconComponent, GitHistoryList, GitRemotes, GitBranches],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './git-view.html',
 })

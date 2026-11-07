@@ -1,3 +1,4 @@
+using System.Globalization;
 using Missive.Application.Common;
 using Missive.Application.Git;
 using Missive.Domain.Git;
@@ -287,6 +288,202 @@ public sealed class GitCliService : IGitService
         {
             return GitErrors.CommandFailed(command, $"Could not read '{path}': {ex.Message}");
         }
+    }
+
+    public async Task<Result<IReadOnlyList<GitBranch>>> ListBranchesAsync(
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var remotes = await RunCheckedAsync(workspacePath, "remote", ["remote"], cancellationToken);
+        if (remotes.IsFailure)
+        {
+            return remotes.Error!;
+        }
+
+        var refs = await RunCheckedAsync(
+            workspacePath,
+            "for-each-ref",
+            [
+                "for-each-ref",
+                "--format=%(refname)%00%(objectname)%00%(upstream:short)%00%(HEAD)%00%(committerdate:iso-strict)%00%(symref)%00%(contents:subject)",
+                "refs/heads",
+                "refs/remotes",
+            ],
+            cancellationToken);
+        if (refs.IsFailure)
+        {
+            return refs.Error!;
+        }
+
+        var remoteNames = remotes.Value.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return Result<IReadOnlyList<GitBranch>>.Success(ParseBranches(refs.Value.StandardOutput, remoteNames));
+    }
+
+    /// <summary>
+    /// Parses the <c>git for-each-ref</c> output of <see cref="ListBranchesAsync"/>: one line per
+    /// ref with NUL-separated fields. Symbolic refs (a remote's <c>HEAD</c>) are skipped.
+    /// </summary>
+    internal static IReadOnlyList<GitBranch> ParseBranches(string output, IReadOnlyList<string> remotes)
+    {
+        const string Heads = "refs/heads/";
+        const string Remotes = "refs/remotes/";
+        var local = new List<GitBranch>();
+        var remote = new List<GitBranch>();
+        foreach (var line in output.ReplaceLineEndings("\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = line.Split('\0');
+            if (fields.Length < 7 || fields[5].Length > 0)
+            {
+                continue;
+            }
+
+            DateTimeOffset? date = DateTimeOffset.TryParse(fields[4], CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+                ? parsed
+                : null;
+            if (fields[0].StartsWith(Heads, StringComparison.Ordinal))
+            {
+                local.Add(new GitBranch(
+                    fields[0][Heads.Length..],
+                    null,
+                    fields[3] == "*",
+                    fields[2].Length > 0 ? fields[2] : null,
+                    fields[1],
+                    date,
+                    fields[6]));
+            }
+            else if (fields[0].StartsWith(Remotes, StringComparison.Ordinal))
+            {
+                var name = fields[0][Remotes.Length..];
+                // Remote names can contain slashes: the longest remote the name starts with owns it.
+                var owner = remotes
+                    .Where(r => name.StartsWith(r + "/", StringComparison.Ordinal))
+                    .MaxBy(r => r.Length)
+                    ?? (name.Contains('/') ? name[..name.IndexOf('/')] : null);
+                if (owner is not null)
+                {
+                    remote.Add(new GitBranch(name, owner, false, null, fields[1], date, fields[6]));
+                }
+            }
+        }
+
+        return [.. local.OrderBy(b => b.Name, StringComparer.Ordinal), .. remote.OrderBy(b => b.Name, StringComparer.Ordinal)];
+    }
+
+    public async Task<Result<Unit>> SwitchBranchAsync(string workspacePath, string branch, CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        // --no-guess: never create a branch from a remote one by accident.
+        return await RunSwitchAsync(workspacePath, ["switch", "--no-guess", branch], cancellationToken);
+    }
+
+    public async Task<Result<Unit>> CreateBranchAsync(
+        string workspacePath,
+        BranchName name,
+        bool switchTo,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        if (!switchTo)
+        {
+            return Done(await RunCheckedAsync(workspacePath, "branch", ["branch", "--no-track", name.Value], cancellationToken));
+        }
+
+        return await RunSwitchAsync(workspacePath, ["switch", "--no-track", "-c", name.Value], cancellationToken);
+    }
+
+    public async Task<Result<Unit>> CheckoutRemoteBranchAsync(
+        string workspacePath,
+        string remoteBranch,
+        BranchName localName,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        return await RunSwitchAsync(
+            workspacePath,
+            ["switch", "--track", "-c", localName.Value, "refs/remotes/" + remoteBranch],
+            cancellationToken);
+    }
+
+    public async Task<Result<Unit>> DeleteBranchAsync(
+        string workspacePath,
+        string branch,
+        bool force,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = await GetWorkspacePrefixAsync(workspacePath, cancellationToken);
+        if (prefix.IsFailure)
+        {
+            return prefix.Error!;
+        }
+
+        var result = await RunAsync(workspacePath, ["branch", force ? "-D" : "-d", "--", branch], cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        if (!result.Value.Succeeded)
+        {
+            var details = Details(result.Value);
+            return details.Contains("not fully merged", StringComparison.OrdinalIgnoreCase)
+                ? GitErrors.BranchNotMerged(branch)
+                : GitFailure.Classify("branch", details);
+        }
+
+        return Unit.Value;
+    }
+
+    /// <summary>Runs a <c>git switch</c>, explaining refusals over uncommitted changes.</summary>
+    private async Task<Result<Unit>> RunSwitchAsync(string workspacePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        var result = await RunAsync(workspacePath, arguments, cancellationToken);
+        if (result.IsFailure)
+        {
+            return result.Error!;
+        }
+
+        if (result.Value.Succeeded)
+        {
+            return Unit.Value;
+        }
+
+        var details = Details(result.Value);
+        if (details.Contains("would be overwritten by checkout", StringComparison.OrdinalIgnoreCase)
+            || details.Contains("would be overwritten by switch", StringComparison.OrdinalIgnoreCase)
+            || details.Contains("untracked working tree files would be overwritten", StringComparison.OrdinalIgnoreCase))
+        {
+            return GitErrors.UncommittedChanges(GitFailure.OverwrittenPaths(details));
+        }
+
+        if (details.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            var created = arguments.ToList().IndexOf("-c");
+            return GitErrors.BranchExists(created >= 0 && created + 1 < arguments.Count ? arguments[created + 1] : string.Empty);
+        }
+
+        return GitFailure.Classify("switch", details);
     }
 
     public async Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(

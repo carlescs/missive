@@ -57,7 +57,13 @@
     </button>
   </div>
 } @else {
-  @if (!git.conflict() && git.failedOperation() !== 'remote' && git.error(); as error) {
+  @if (
+    !git.conflict() &&
+      git.failedOperation() !== 'remote' &&
+      git.failedOperation() !== 'branch' &&
+      git.error();
+    as error
+  ) {
     <div
       class="mx-3 mb-2 flex items-start gap-2 rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-800"
       role="alert"
@@ -405,6 +411,7 @@
         }
       </ul>
     }
+    <app-git-branches />
     <app-git-remotes />
   } @else if (git.busy() === 'refresh') {
     <p class="px-3 text-sm text-slate-500">

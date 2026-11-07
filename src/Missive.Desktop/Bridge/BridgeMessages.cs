@@ -185,6 +185,30 @@ internal static class BridgeMessageTypes
     /// </summary>
     public const string GitDiff = "git.diff";
 
+    /// <summary>Lists the local and remote-tracking branches. Payload: none. Result: status and branches.</summary>
+    public const string GitBranchList = "git.branch.list";
+
+    /// <summary>
+    /// Checks out a local branch; refused with uncommitted changes. Payload:
+    /// <see cref="GitBranchNamePayload"/>. Result: status and branches.
+    /// </summary>
+    public const string GitBranchSwitch = "git.branch.switch";
+
+    /// <summary>Creates a branch at HEAD. Payload: <see cref="GitCreateBranchPayload"/>. Result: status and branches.</summary>
+    public const string GitBranchCreate = "git.branch.create";
+
+    /// <summary>
+    /// Checks out a remote-tracking branch as a new local tracking branch. Payload:
+    /// <see cref="GitBranchNamePayload"/> (e.g. <c>origin/feature</c>). Result: status and branches.
+    /// </summary>
+    public const string GitBranchCheckout = "git.branch.checkout";
+
+    /// <summary>
+    /// Deletes a local branch; an unmerged one only with <c>force</c>. Payload:
+    /// <see cref="GitDeleteBranchPayload"/>. Result: status and branches.
+    /// </summary>
+    public const string GitBranchDelete = "git.branch.delete";
+
     /// <summary>Lists the repository's remotes. Payload: none. Result: remotes.</summary>
     public const string GitRemoteList = "git.remote.list";
 
@@ -316,6 +340,14 @@ internal sealed record GitAddRemotePayload(string Name, string Url);
 internal sealed record GitUpdateRemotePayload(string Name, string NewName, string Url);
 
 internal sealed record GitRemoteNamePayload(string Name);
+
+internal sealed record GitBranchNamePayload(string Name);
+
+/// <param name="SwitchTo">Whether to check out the new branch.</param>
+internal sealed record GitCreateBranchPayload(string Name, bool SwitchTo = false);
+
+/// <param name="Force">Delete even if its commits aren't merged anywhere (after a second confirmation).</param>
+internal sealed record GitDeleteBranchPayload(string Name, bool Force = false);
 
 internal static class BridgeErrorCodes
 {

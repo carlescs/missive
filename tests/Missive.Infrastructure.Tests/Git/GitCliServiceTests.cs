@@ -811,6 +811,122 @@ public sealed class GitCliServiceTests : IDisposable
         return bob;
     }
 
+    [Fact]
+    public async Task Branches_AreCreatedListedSwitchedAndDeleted()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+
+        Assert.True(BranchName.TryCreate("feature/login", out var feature, out _));
+        var created = await _git.CreateBranchAsync(repository, feature, switchTo: false);
+        Assert.True(created.IsSuccess, created.Error?.Message);
+        var branches = await _git.ListBranchesAsync(repository);
+        Assert.True(branches.IsSuccess, branches.Error?.Message);
+        Assert.Equal(["feature/login", "main"], branches.Value.Select(b => b.Name));
+        Assert.True(branches.Value.Single(b => b.Name == "main").IsCurrent);
+        Assert.Equal("Add A", branches.Value[0].Subject);
+        Assert.Equal(TestGit.Head(repository), branches.Value[0].CommitId);
+        Assert.NotNull(branches.Value[0].CommittedAt);
+
+        var switched = await _git.SwitchBranchAsync(repository, "feature/login");
+        Assert.True(switched.IsSuccess, switched.Error?.Message);
+        Assert.Equal("feature/login", (await _git.GetStatusAsync(repository)).Value.Branch);
+
+        Write(repository, "b.yaml", "name: B\n");
+        TestGit.CommitAll(repository, "Add B");
+        Assert.True((await _git.SwitchBranchAsync(repository, "main")).IsSuccess);
+        Assert.False(File.Exists(Path.Combine(repository, "b.yaml")));
+
+        var unmerged = await _git.DeleteBranchAsync(repository, "feature/login", force: false);
+        Assert.Equal(GitErrors.BranchNotMergedCode, unmerged.Error?.Code);
+        var forced = await _git.DeleteBranchAsync(repository, "feature/login", force: true);
+        Assert.True(forced.IsSuccess, forced.Error?.Message);
+        Assert.Equal(["main"], (await _git.ListBranchesAsync(repository)).Value.Select(b => b.Name));
+    }
+
+    [Fact]
+    public async Task CreateBranch_WithSwitch_KeepsUncommittedChanges()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        Write(repository, "a.yaml", "name: A2\n");
+
+        Assert.True(BranchName.TryCreate("wip", out var wip, out _));
+        var created = await _git.CreateBranchAsync(repository, wip, switchTo: true);
+
+        Assert.True(created.IsSuccess, created.Error?.Message);
+        var status = (await _git.GetStatusAsync(repository)).Value;
+        Assert.Equal("wip", status.Branch);
+        Assert.Null(status.Upstream);
+        Assert.Equal("a.yaml", Assert.Single(status.Changes).Path);
+        Assert.Equal(GitErrors.BranchExistsCode, (await _git.CreateBranchAsync(repository, wip, switchTo: true)).Error?.Code);
+    }
+
+    [Fact]
+    public async Task SwitchBranch_ThatWouldOverwriteChanges_IsRefusedAndNamesTheFiles()
+    {
+        var repository = InitRepository("repo");
+        Write(repository, "a.yaml", "name: A\n");
+        TestGit.CommitAll(repository, "Add A");
+        TestGit.Run(repository, "switch", "--quiet", "-c", "other");
+        Write(repository, "a.yaml", "name: Other\n");
+        TestGit.CommitAll(repository, "Change A");
+        TestGit.Run(repository, "switch", "--quiet", "main");
+        Write(repository, "a.yaml", "name: Mine\n");
+
+        var result = await _git.SwitchBranchAsync(repository, "other");
+
+        Assert.Equal(GitErrors.UncommittedChangesCode, result.Error?.Code);
+        Assert.Contains("a.yaml", result.Error!.Message);
+        Assert.Equal("name: Mine\n", File.ReadAllText(Path.Combine(repository, "a.yaml")));
+    }
+
+    [Fact]
+    public async Task RemoteBranches_AreListedAndCheckedOutAsTrackingBranches()
+    {
+        var (alice, bob) = InitTwoClones();
+        TestGit.Run(alice, "switch", "--quiet", "-c", "feature/x");
+        Write(alice, "x.yaml", "name: X\n");
+        TestGit.CommitAll(alice, "Add X");
+        TestGit.Run(alice, "push", "--quiet", "origin", "feature/x");
+        TestGit.Run(bob, "fetch", "--quiet");
+
+        var branches = (await _git.ListBranchesAsync(bob)).Value;
+        Assert.Equal(["main", "origin/feature/x", "origin/main"], branches.Select(b => b.Name));
+        var remote = branches.Single(b => b.Name == "origin/feature/x");
+        Assert.Equal("origin", remote.Remote);
+        Assert.Equal("origin/main", branches.Single(b => b.Name == "main").Upstream);
+
+        Assert.True(BranchName.TryCreate(remote.LocalName, out var local, out _));
+        var checkedOut = await _git.CheckoutRemoteBranchAsync(bob, remote.Name, local);
+
+        Assert.True(checkedOut.IsSuccess, checkedOut.Error?.Message);
+        var status = (await _git.GetStatusAsync(bob)).Value;
+        Assert.Equal("feature/x", status.Branch);
+        Assert.Equal("origin/feature/x", status.Upstream);
+        Assert.True(File.Exists(Path.Combine(bob, "x.yaml")));
+    }
+
+    [Fact]
+    public void ParseBranches_AssignsRemoteBranchesToTheLongestMatchingRemote()
+    {
+        var output = string.Join('\n',
+            "refs/heads/main\0abc\0origin/main\0*\02026-01-02T03:04:05+00:00\0\0Initial",
+            "refs/remotes/origin/HEAD\0abc\0\0 \02026-01-02T03:04:05+00:00\0refs/remotes/origin/main\0Initial",
+            "refs/remotes/team/eu/feature\0def\0\0 \0\0\0Work");
+
+        var branches = GitCliService.ParseBranches(output, ["origin", "team", "team/eu"]);
+
+        Assert.Equal(["main", "team/eu/feature"], branches.Select(b => b.Name));
+        Assert.True(branches[0].IsCurrent);
+        Assert.Equal(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), branches[0].CommittedAt);
+        Assert.Equal("team/eu", branches[1].Remote);
+        Assert.Equal("feature", branches[1].LocalName);
+        Assert.Null(branches[1].CommittedAt);
+    }
+
     private string InitRepository(string name)
     {
         var path = _temp.Combine(name);

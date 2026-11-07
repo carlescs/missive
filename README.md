@@ -67,8 +67,9 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token and API key
 - [ ] Local response history (kept out of git)
-- [ ] Git sync: changed-file status and diffs, commit, pull, push, current
-      branch, remotes, and clear reporting of merge conflicts
+- [ ] Git sync: changed-file status and diffs, commit, pull, push, branches
+      (switch, create, check out, delete), remotes, and clear reporting of
+      merge conflicts
 - [x] Import from Postman, Insomnia, HAR and OpenAPI/Swagger; export for
       Postman and Insomnia
 
@@ -407,8 +408,8 @@ exports diff cleanly.
 ## Git sync
 
 When the workspace folder is a git repository, Missive shows which request and
-environment files changed, lets you commit them with a message, and pulls and
-pushes the current branch. It uses your existing git credentials. Missive never
+environment files changed, lets you commit them with a message, pulls and
+pushes the current branch, and switches, creates and deletes branches. It uses your existing git credentials. Missive never
 force-pushes and never resolves conflicts automatically: conflicting files are
 reported so you can resolve them (in Missive's editor or your own tools).
 
@@ -476,6 +477,27 @@ configuration, hooks and credential helpers apply as usual. In detail:
   as a **Request** or as **Text**, just like in the diff view, and the same
   fallback to text applies. Reviewing history is
   read-only; it never checks out or changes anything.
+- **Branches** lists the local branches (the current one marked, each with its
+  upstream and last commit) and the remote branches as of the last fetch.
+  - **Switch** checks out another local branch (`git switch`, never forced).
+    It is refused while there are uncommitted changes in the workspace — the
+    files are named, as for a pull — or a merge is in progress, so a switch
+    never carries changes over or loses them. If open tabs have unsaved edits,
+    Missive asks first: they stay in their tabs. After a switch the explorer,
+    open tabs and environments are reloaded from disk.
+  - **Create** (the + button) makes a branch at the current commit, without an
+    upstream (**Publish** pushes it), and switches to it unless you untick
+    that; uncommitted changes come along, since both branches start from the
+    same commit.
+  - **Check out** a remote branch (`origin/feature`) to create a local branch
+    of the same name (`feature`) that tracks it, refused like a switch when
+    there are uncommitted changes. A remote branch that a local branch
+    already tracks offers to switch to that branch instead.
+  - **Delete** removes a local branch after a confirmation; the current branch
+    can't be deleted. If the branch has commits that aren't merged into its
+    upstream or the current branch, git keeps it and Missive asks a second
+    time, saying the commits will be lost, before deleting it anyway
+    (`git branch -D`). Remote branches are never deleted.
 - **Remotes** lists the repository's remotes with their URLs. You can add one,
   rename it or change its URL (`git remote add`, `rename`, `set-url`), or
   remove it after confirming (`git remote remove`, which also drops its

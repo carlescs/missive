@@ -3,6 +3,8 @@ import { Bridge, BridgeError } from './bridge';
 import {
   BridgeErrorShape,
   ConflictResolution,
+  GitBranch,
+  GitBranches,
   GitConflict,
   GitFileDiff,
   GitIdentity,
@@ -25,7 +27,8 @@ export type GitOperation =
   | 'conflict'
   | 'resolve'
   | 'abort'
-  | 'remote';
+  | 'remote'
+  | 'branch';
 
 export interface GitNotice {
   kind: 'info' | 'warning';
@@ -64,6 +67,8 @@ export class GitStore {
   private diffToken = 0;
   /** The repository's remotes; `null` until they are read. */
   readonly remotes = signal<GitRemote[] | null>(null);
+  /** Local and remote-tracking branches; `null` until read. */
+  readonly branches = signal<GitBranch[] | null>(null);
   /** The commit identity git uses here; `null` until it is read. */
   readonly identity = signal<GitIdentity | null>(null);
 
@@ -114,6 +119,7 @@ export class GitStore {
         this.conflict.set(null);
         this.closeDiff();
         this.remotes.set(null);
+        this.branches.set(null);
         this.identity.set(null);
         if (root && this.available) void this.refresh();
       });
@@ -146,6 +152,7 @@ export class GitStore {
       (status) => {
         this.status.set(status);
         void this.loadRemotes();
+        void this.loadBranches();
         void this.loadIdentity();
       },
     );
@@ -402,6 +409,93 @@ export class GitStore {
         (s) => this.status.set(s),
       );
     return ok;
+  }
+
+  /** Reads the branches; failures leave the last list (the status shows git errors). */
+  async loadBranches(): Promise<void> {
+    const root = this.root();
+    if (!root) return;
+    try {
+      const result = await this.bridge.send('git.branch.list');
+      if (this.root() === root) this.branches.set(result.branches);
+    } catch {
+      if (this.root() === root) this.branches.set(null);
+    }
+  }
+
+  /**
+   * Checks out another local branch, then reloads the workspace and open tabs from disk. Open
+   * tabs with unsaved edits keep them, after the user agrees. Resolves to whether it switched.
+   */
+  async switchBranch(name: string): Promise<boolean> {
+    if (!this.confirmUnsavedTabs(`Switch to ${name}?`)) return false;
+    return this.runBranch(
+      () => this.bridge.send('git.branch.switch', { name }),
+      `Switched to ${name}.`,
+      true,
+    );
+  }
+
+  /** Creates a branch at the current commit, optionally switching to it. */
+  createBranch(name: string, switchTo: boolean): Promise<boolean> {
+    const trimmed = name.trim();
+    return this.runBranch(
+      () => this.bridge.send('git.branch.create', { name: trimmed, switchTo }),
+      switchTo ? `Created and switched to ${trimmed}.` : `Created the branch ${trimmed}.`,
+      // Same commit: files don't change, but the status (branch, upstream) does.
+      false,
+    );
+  }
+
+  /** Checks out a remote-tracking branch as a new local branch that tracks it. */
+  async checkoutRemoteBranch(branch: GitBranch): Promise<boolean> {
+    const local = branch.localName ?? branch.name;
+    if (!this.confirmUnsavedTabs(`Check out ${branch.name} as ${local}?`)) return false;
+    return this.runBranch(
+      () => this.bridge.send('git.branch.checkout', { name: branch.name }),
+      `Checked out ${branch.name} as ${local}, tracking it.`,
+      true,
+    );
+  }
+
+  /**
+   * Deletes a local branch. Without `force`, git keeps a branch whose commits aren't merged
+   * anywhere; the error code is then `git.branch_not_merged`.
+   */
+  deleteBranch(name: string, force = false): Promise<boolean> {
+    return this.runBranch(
+      () => this.bridge.send('git.branch.delete', { name, force }),
+      `Deleted the branch ${name}.`,
+      false,
+    );
+  }
+
+  private async runBranch(
+    call: () => Promise<GitBranches>,
+    text: string,
+    reload: boolean,
+  ): Promise<boolean> {
+    return this.run('branch', call, (result) => {
+      this.status.set(result.status);
+      this.branches.set(result.branches);
+      this.notice.set({ kind: 'info', text });
+      if (reload) {
+        // Another branch can add, change or remove request and environment files.
+        void this.workspace.refresh();
+        void this.workspace.reloadFromDisk();
+        void this.environments.refresh();
+      }
+    });
+  }
+
+  /** Asks before a checkout when open tabs have unsaved edits, which git can't see. */
+  private confirmUnsavedTabs(question: string): boolean {
+    const unsaved = this.unsavedCount();
+    if (!unsaved) return true;
+    return confirm(
+      `${question} ${unsaved} open tab${unsaved === 1 ? ' has' : 's have'} unsaved changes. ` +
+        'They stay in their tabs, and saving them later writes them to the new branch.',
+    );
   }
 
   /** Resolves one conflicted file the way the user chose. */

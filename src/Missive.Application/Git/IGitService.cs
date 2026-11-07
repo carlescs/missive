@@ -142,6 +142,41 @@ public interface IGitService
     /// </summary>
     Task<Result<GitFileDiff>> GetFileDiffAsync(string workspacePath, GitChange change, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists the local branches and the remote-tracking branches (without the remotes' <c>HEAD</c>
+    /// pointers), each sorted by name, local ones first.
+    /// </summary>
+    Task<Result<IReadOnlyList<GitBranch>>> ListBranchesAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks out an existing local branch (<c>git switch</c>, never forced). Fails with
+    /// <see cref="GitErrors.UncommittedChangesCode"/> when uncommitted changes would be overwritten.
+    /// </summary>
+    Task<Result<Unit>> SwitchBranchAsync(string workspacePath, string branch, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a branch at the current commit, without an upstream, and with
+    /// <paramref name="switchTo"/> checks it out (uncommitted changes come along).
+    /// </summary>
+    Task<Result<Unit>> CreateBranchAsync(string workspacePath, BranchName name, bool switchTo, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a local branch named <paramref name="localName"/> from a remote-tracking branch, set
+    /// to track it, and checks it out.
+    /// </summary>
+    Task<Result<Unit>> CheckoutRemoteBranchAsync(
+        string workspacePath,
+        string remoteBranch,
+        BranchName localName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a local branch. Without <paramref name="force"/> a branch with commits that aren't
+    /// merged (into its upstream or the current branch) is kept, failing with
+    /// <see cref="GitErrors.BranchNotMergedCode"/>. Remote branches are never deleted.
+    /// </summary>
+    Task<Result<Unit>> DeleteBranchAsync(string workspacePath, string branch, bool force, CancellationToken cancellationToken = default);
+
     /// <summary>Lists the repository's remotes, sorted by name.</summary>
     Task<Result<IReadOnlyList<GitRemote>>> ListRemotesAsync(string workspacePath, CancellationToken cancellationToken = default);
 

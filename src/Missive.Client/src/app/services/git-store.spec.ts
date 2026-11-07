@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Mock } from 'vitest';
-import { GitStatus, WorkspaceDto } from '../models/messages';
+import { GitBranch, GitStatus, WorkspaceDto } from '../models/messages';
 import { Bridge, BridgeError } from './bridge';
 import { GitStore } from './git-store';
 import { WorkspaceStore } from './workspace-store';
@@ -17,6 +17,17 @@ const status = (patch: Partial<GitStatus> = {}): GitStatus => ({
   ...patch,
 });
 
+const main: GitBranch = {
+  name: 'main',
+  remote: null,
+  current: true,
+  upstream: 'origin/main',
+  commitId: 'a1',
+  date: null,
+  subject: 'Init',
+};
+const feature: GitBranch = { ...main, name: 'feature', current: false, upstream: null };
+
 describe('GitStore', () => {
   let send: Mock;
   let handlers: Record<string, (payload: any) => unknown>;
@@ -27,6 +38,7 @@ describe('GitStore', () => {
     handlers = {
       'git.status': () => status(),
       'git.remote.list': () => [{ name: 'origin', fetchUrl: 'u', pushUrl: 'u' }],
+      'git.branch.list': () => ({ status: status(), branches: [main] }),
       'git.identity': () => ({ name: 'Ada', email: 'ada@example.com' }),
       'workspace.tree': () => workspace,
     };
@@ -114,5 +126,55 @@ describe('GitStore', () => {
     await store.saveAll();
 
     expect(save).toHaveBeenCalledExactlyOnceWith('a.yaml');
+  });
+
+  it('loads the branches with the status', async () => {
+    await vi.waitFor(() => expect(store.branches()).toEqual([main]));
+  });
+
+  it('switches branches and reloads the workspace from disk', async () => {
+    handlers['git.branch.switch'] = () => ({
+      status: status({ branch: 'feature' }),
+      branches: [
+        { ...main, current: false },
+        { ...feature, current: true },
+      ],
+    });
+    const refresh = vi.spyOn(workspaceStore, 'refresh').mockResolvedValue();
+    const reload = vi.spyOn(workspaceStore, 'reloadFromDisk').mockResolvedValue();
+
+    expect(await store.switchBranch('feature')).toBe(true);
+
+    expect(send).toHaveBeenCalledWith('git.branch.switch', { name: 'feature' });
+    expect(store.status()?.branch).toBe('feature');
+    expect(store.branches()?.find((b) => b.current)?.name).toBe('feature');
+    expect(store.notice()?.text).toBe('Switched to feature.');
+    expect(refresh).toHaveBeenCalled();
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('asks before switching with unsaved tabs', async () => {
+    workspaceStore.documents.set([
+      { id: 'a.yaml', key: 'a', path: 'a.yaml', dirty: true, saving: false } as never,
+    ]);
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+
+    expect(await store.switchBranch('feature')).toBe(false);
+
+    expect(confirm.mock.calls[0][0]).toContain('1 open tab has unsaved changes');
+    expect(send).not.toHaveBeenCalledWith('git.branch.switch', expect.anything());
+    vi.unstubAllGlobals();
+  });
+
+  it('reports a switch refused over uncommitted changes', async () => {
+    handlers['git.branch.switch'] = () => {
+      throw new BridgeError('git.uncommitted_changes', 'You have uncommitted changes to: a.yaml.');
+    };
+
+    expect(await store.switchBranch('feature')).toBe(false);
+
+    expect(store.failedOperation()).toBe('branch');
+    expect(store.error()?.message).toContain('a.yaml');
   });
 });

@@ -358,6 +358,31 @@ export interface GitFileDiff {
   requestError?: string | null;
 }
 
+/** A local branch, or a remote-tracking branch (a remote's branch as of the last fetch). */
+export interface GitBranch {
+  /** `main`, or `origin/main` for a remote-tracking branch. */
+  name: string;
+  /** For a remote-tracking branch, its remote; `null` for a local branch. */
+  remote: string | null;
+  current: boolean;
+  /** For a local branch, the branch it tracks (`origin/main`), if any. */
+  upstream: string | null;
+  commitId: string;
+  /** ISO date of the commit it points to. */
+  date: string | null;
+  subject: string;
+  /** For a remote-tracking branch, the name a local branch checked out from it gets. */
+  localName?: string | null;
+  /** For a remote-tracking branch, the local branch that tracks it, if any. */
+  trackedBy?: string | null;
+}
+
+export interface GitBranches {
+  status: GitStatus;
+  /** Local branches first, then remote-tracking ones, each sorted by name. */
+  branches: GitBranch[];
+}
+
 export interface GitRemote {
   name: string;
   fetchUrl: string;
@@ -526,6 +551,15 @@ export interface BridgeMessages {
   /** The committed and working tree versions of a changed file. */
   'git.diff': { payload: { path: string }; result: GitFileDiff };
   /** The repository's remotes, sorted by name. */
+  'git.branch.list': { payload: void; result: GitBranches };
+  /** Checks out a local branch; refused while there are uncommitted changes or a merge. */
+  'git.branch.switch': { payload: { name: string }; result: GitBranches };
+  /** Creates a branch at the current commit, optionally checking it out. */
+  'git.branch.create': { payload: { name: string; switchTo: boolean }; result: GitBranches };
+  /** Checks out a remote-tracking branch (`origin/x`) as a new local branch tracking it. */
+  'git.branch.checkout': { payload: { name: string }; result: GitBranches };
+  /** Deletes a local branch; one with unmerged commits only with `force`. */
+  'git.branch.delete': { payload: { name: string; force: boolean }; result: GitBranches };
   'git.remote.list': { payload: void; result: GitRemote[] };
   /** Adds a remote; nothing is fetched or pushed. */
   'git.remote.add': { payload: { name: string; url: string }; result: GitRemote[] };

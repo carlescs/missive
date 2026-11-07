@@ -173,6 +173,16 @@ internal static class BridgeHandlers
                 async (p, ct) => (await Use<GetCommitFile>().ExecuteAsync(new GetCommitFileRequest(p.CommitId, p.Path), ct)))
             .Register<GitDiffPayload, GitFileDiffDto>(BridgeMessageTypes.GitDiff,
                 (p, ct) => Use<GetFileDiff>().ExecuteAsync(p.Path, ct))
+            .Register(BridgeMessageTypes.GitBranchList,
+                async ct => (await Use<ListBranches>().ExecuteAsync(ct)).Map(GitBranchesDto.From))
+            .Register<GitBranchNamePayload, GitBranchesDto>(BridgeMessageTypes.GitBranchSwitch,
+                async (p, ct) => (await Use<SwitchBranch>().ExecuteAsync(p.Name, ct)).Map(GitBranchesDto.From))
+            .Register<GitCreateBranchPayload, GitBranchesDto>(BridgeMessageTypes.GitBranchCreate,
+                async (p, ct) => (await Use<CreateBranch>().ExecuteAsync(new CreateBranchRequest(p.Name, p.SwitchTo), ct)).Map(GitBranchesDto.From))
+            .Register<GitBranchNamePayload, GitBranchesDto>(BridgeMessageTypes.GitBranchCheckout,
+                async (p, ct) => (await Use<CheckoutRemoteBranch>().ExecuteAsync(p.Name, ct)).Map(GitBranchesDto.From))
+            .Register<GitDeleteBranchPayload, GitBranchesDto>(BridgeMessageTypes.GitBranchDelete,
+                async (p, ct) => (await Use<DeleteBranch>().ExecuteAsync(new DeleteBranchRequest(p.Name, p.Force), ct)).Map(GitBranchesDto.From))
             .Register(BridgeMessageTypes.GitRemoteList,
                 async ct => (await Use<ListRemotes>().ExecuteAsync(ct)).Map(GitRemoteDto.From))
             .Register<GitAddRemotePayload, IReadOnlyList<GitRemoteDto>>(BridgeMessageTypes.GitRemoteAdd,

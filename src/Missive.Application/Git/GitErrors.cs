@@ -41,6 +41,13 @@ public static class GitErrors
     public const string UnrelatedHistoriesCode = "git.unrelated_histories";
     public const string UpstreamGoneCode = "git.upstream_gone";
     public const string NoCommitsCode = "git.no_commits";
+    public const string InvalidBranchNameCode = "git.invalid_branch_name";
+    public const string BranchExistsCode = "git.branch_exists";
+    public const string BranchNotFoundCode = "git.branch_not_found";
+    public const string UncommittedChangesCode = "git.uncommitted_changes";
+    public const string BranchDuringMergeCode = "git.branch_during_merge";
+    public const string BranchNotMergedCode = "git.branch_not_merged";
+    public const string CurrentBranchCode = "git.current_branch";
 
     public static Error WorkspaceNotFound(string path) =>
         new(WorkspaceNotFoundCode, $"The workspace folder '{path}' does not exist.");
@@ -139,6 +146,39 @@ public static class GitErrors
 
     public static Error NoCommits() =>
         new(NoCommitsCode, "The branch has no commits yet. Commit your changes first, then publish it.");
+
+    public static Error InvalidBranchName(string message) =>
+        new(InvalidBranchNameCode, message);
+
+    public static Error BranchExists(string name) =>
+        new(BranchExistsCode, $"A branch named '{name}' already exists.");
+
+    public static Error LocalBranchExists(string name) =>
+        new(BranchExistsCode, $"A local branch named '{name}' already exists. Switch to it instead.");
+
+    public static Error BranchNotFound(string name) =>
+        new(BranchNotFoundCode, $"There is no branch named '{name}'.");
+
+    public static Error UncommittedChanges(IReadOnlyList<string> paths) =>
+        new(
+            UncommittedChangesCode,
+            paths.Count == 0
+                ? "You have uncommitted changes that switching branches could overwrite. Commit or discard them, then switch."
+                : $"You have uncommitted changes to: {string.Join(", ", paths)}. Commit or discard them, then switch branches.");
+
+    public static Error NoCommitsToBranchFrom() =>
+        new(NoCommitsCode, "The current branch has no commits yet, so a new branch has nothing to start from. Commit first.");
+
+    public static Error BranchDuringMerge() =>
+        new(BranchDuringMergeCode, "A merge is in progress; complete it or abort it before switching branches.");
+
+    public static Error BranchNotMerged(string name) =>
+        new(
+            BranchNotMergedCode,
+            $"The branch '{name}' has commits that are not merged anywhere else; deleting it would lose them.");
+
+    public static Error CurrentBranch(string name) =>
+        new(CurrentBranchCode, $"'{name}' is the current branch. Switch to another branch before deleting it.");
 
     public static Error PushRejected(string details) =>
         new(PushRejectedCode, WithDetails("The remote rejected the push. Pull the latest changes and try again.", details));

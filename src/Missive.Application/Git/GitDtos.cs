@@ -168,6 +168,43 @@ public sealed record GitRemoteDto(string Name, string FetchUrl, string PushUrl)
     public static IReadOnlyList<GitRemoteDto> From(IReadOnlyList<GitRemote> remotes) => remotes.Select(From).ToList();
 }
 
+/// <param name="Name">The short name: <c>main</c>, or <c>origin/main</c> for a remote-tracking branch.</param>
+/// <param name="Remote">For a remote-tracking branch, its remote; <c>null</c> for a local branch.</param>
+/// <param name="LocalName">For a remote-tracking branch, the name a local branch checked out from it gets.</param>
+/// <param name="TrackedBy">For a remote-tracking branch, the local branch that tracks it, if any.</param>
+public sealed record GitBranchDto(
+    string Name,
+    string? Remote,
+    bool Current,
+    string? Upstream,
+    string CommitId,
+    DateTimeOffset? Date,
+    string Subject,
+    string? LocalName = null,
+    string? TrackedBy = null);
+
+public sealed record GitBranchesDto(GitStatusDto Status, IReadOnlyList<GitBranchDto> Branches)
+{
+    public static GitBranchesDto From(GitBranchesResult result)
+    {
+        var branches = result.Branches;
+        return new(
+            GitStatusDto.From(result.Status),
+            branches
+                .Select(b => new GitBranchDto(
+                    b.Name,
+                    b.Remote,
+                    b.IsCurrent,
+                    b.Upstream,
+                    b.CommitId,
+                    b.CommittedAt,
+                    b.Subject,
+                    b.IsRemote ? b.LocalName : null,
+                    b.IsRemote ? branches.FirstOrDefault(l => !l.IsRemote && l.Upstream == b.Name)?.Name : null))
+                .ToList());
+    }
+}
+
 public sealed record GitIdentityDto(string? Name, string? Email)
 {
     public static GitIdentityDto From(GitIdentitySettings identity) => new(identity.Name, identity.Email);
