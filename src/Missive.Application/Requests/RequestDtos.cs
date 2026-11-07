@@ -17,6 +17,7 @@ public sealed record AuthDto(
 /// <param name="Type"><c>none</c>, <c>json</c>, <c>text</c>, <c>form</c> or <c>urlencoded</c>.</param>
 public sealed record BodyDto(string Type, string Content);
 
+/// <param name="Description">Notes about the request, in Markdown; empty when there are none.</param>
 public sealed record RequestDto(
     string Name,
     string Method,
@@ -24,7 +25,8 @@ public sealed record RequestDto(
     IReadOnlyList<KeyValueDto> Params,
     IReadOnlyList<KeyValueDto> Headers,
     AuthDto Auth,
-    BodyDto Body);
+    BodyDto Body,
+    string? Description = null);
 
 /// <summary>A request as stored: its (possibly new) path and its content.</summary>
 public sealed record SavedRequestDto(string Path, RequestDto Request);

@@ -82,13 +82,19 @@ internal static partial class PostmanFormat
             {
                 if (ImportRequest(itemName, request, inherited, warnings) is { } imported)
                 {
-                    requests.Add(imported);
+                    // Postman keeps a request's description on its request, older exports on the item.
+                    var description = Description(request.Get("description")) ?? Description(item.Get("description"));
+                    requests.Add(description is null ? imported : imported with { Description = description });
                 }
             }
         }
 
         return new CollectionFolder(name, folders, requests);
     }
+
+    /// <summary>A description is text, or an object with the text in <c>content</c>.</summary>
+    private static string? Description(JsonNode? description) =>
+        (description is JsonObject ? description.Str("content") : description.Text()) is { Length: > 0 } text ? text : null;
 
     private static HttpRequestDefinition? ImportRequest(string name, JsonNode request, RequestAuth inherited, List<string> warnings)
     {
@@ -368,6 +374,11 @@ internal static partial class PostmanFormat
         }
 
         result["url"] = ExportUrl(request.Url, request.Params);
+        if (original.Description.Length > 0)
+        {
+            result["description"] = original.Description;
+        }
+
         return result;
     }
 

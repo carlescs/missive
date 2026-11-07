@@ -13,7 +13,8 @@ public static class RequestMapper
         request.Params.Select(ToDto).ToList(),
         request.Headers.Select(ToDto).ToList(),
         ToDto(request.Auth),
-        new BodyDto(BodyTypeName(request.Body.Type), request.Body.Content));
+        new BodyDto(BodyTypeName(request.Body.Type), request.Body.Content),
+        request.Description);
 
     /// <summary>
     /// Builds a valid domain request from a DTO. Rows with neither key nor value (the blank row the
@@ -44,7 +45,10 @@ public static class RequestMapper
             ToEntries(dto.Params),
             ToEntries(dto.Headers),
             auth.Value,
-            bodyType == BodyType.None ? RequestBody.None : new RequestBody(bodyType, dto.Body!.Content ?? string.Empty));
+            bodyType == BodyType.None ? RequestBody.None : new RequestBody(bodyType, dto.Body!.Content ?? string.Empty))
+        {
+            Description = NormalizeDescription(dto.Description),
+        };
 
         var errors = request.Validate();
         return errors.Count == 0 ? request : Invalid(string.Join(" ", errors));
@@ -73,6 +77,16 @@ public static class RequestMapper
 
         type = BodyType.None;
         return false;
+    }
+
+    /// <summary>
+    /// Line endings become LF (files are LF-only), and text that is only whitespace counts as no
+    /// description, so an emptied Docs tab leaves the key out of the file.
+    /// </summary>
+    private static string NormalizeDescription(string? description)
+    {
+        var text = (description ?? string.Empty).ReplaceLineEndings("\n");
+        return string.IsNullOrWhiteSpace(text) ? string.Empty : text;
     }
 
     private static KeyValueDto ToDto(KeyValueEntry entry) => new(entry.Key, entry.Value, entry.Enabled);

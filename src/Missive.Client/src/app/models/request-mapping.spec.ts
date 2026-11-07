@@ -11,6 +11,7 @@ const content: RequestContent = {
   auth: { ...EMPTY_AUTH, type: 'bearer', token: 't0k', username: 'kept while editing' },
   bodyType: 'json',
   body: '{"name":"Ada"}',
+  description: '# Notes',
 };
 
 describe('request mapping', () => {
@@ -65,6 +66,7 @@ describe('request mapping', () => {
       expect(result.method).toBe('PATCH');
       expect(result.auth).toEqual(EMPTY_AUTH);
       expect(result.bodyType).toBe('none');
+      expect(result.description).toBe('');
       expect(fromRequestDto({ ...dto, method: 'BREW' }).method).toBe('GET');
     });
   });

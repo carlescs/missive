@@ -1,0 +1,6 @@
+<div
+  class="markdown"
+  [innerHTML]="html.hasValue() ? html.value() : ''"
+  (click)="stayInApp($event)"
+  (auxclick)="stayInApp($event)"
+></div>

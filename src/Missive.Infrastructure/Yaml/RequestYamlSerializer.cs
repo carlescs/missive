@@ -8,7 +8,7 @@ namespace Missive.Infrastructure.Yaml;
 /// <summary>
 /// Reads and writes request files. Keys are always written in the same order
 /// (<c>name</c>, <c>method</c>, <c>url</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
-/// <c>body</c>) and empty or default values are omitted. Disabled params and headers are written
+/// <c>body</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
 /// with a <c>~</c> prefix on their name.
 /// </summary>
 public static class RequestYamlSerializer
@@ -36,6 +36,11 @@ public static class RequestYamlSerializer
                     body.Scalar("content", request.Body.Content);
                 }
             });
+        }
+
+        if (request.Description.Length > 0)
+        {
+            writer.Scalar("description", request.Description);
         }
 
         return writer.ToString();
@@ -80,7 +85,10 @@ public static class RequestYamlSerializer
             ReadEntries(root, "params"),
             ReadEntries(root, "headers"),
             ReadAuth(root),
-            ReadBody(root));
+            ReadBody(root))
+        {
+            Description = OptionalString(root, "description") ?? string.Empty,
+        };
     }
 
     private static void WriteEntries(YamlWriter writer, string key, IReadOnlyList<KeyValueEntry> entries)

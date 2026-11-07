@@ -136,7 +136,10 @@ internal static partial class OpenApiFormat
         }
 
         var auth = Security(context, operation.Get("security") ?? context.Root.Get("security"), name);
-        return new HttpRequestDefinition(name, method, url, query, headers, auth, body);
+        return new HttpRequestDefinition(name, method, url, query, headers, auth, body)
+        {
+            Description = operation.Str("description") ?? string.Empty,
+        };
     }
 
     // ---- Bodies ----

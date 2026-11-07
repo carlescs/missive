@@ -19,7 +19,7 @@ import {
 } from '../../models/request-diff-model';
 import { TextChange } from '../text-change/text-change';
 
-type RequestTab = 'params' | 'headers' | 'auth' | 'body';
+type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'docs';
 
 const ROW_STYLES: Record<RowChange['kind'], { marker: string; row: string; label: string }> = {
   same: { marker: '', row: '', label: 'Unchanged' },
@@ -54,6 +54,7 @@ export class RequestDiff {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'body', label: 'Body' },
+    { id: 'docs', label: 'Docs' },
   ];
 
   private readonly a = computed(() => this.before() ?? EMPTY_REQUEST);

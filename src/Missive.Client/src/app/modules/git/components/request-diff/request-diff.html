@@ -163,6 +163,20 @@
         />
       }
     }
+    @case ('docs') {
+      @if (!a.description && !b.description) {
+        <p class="mt-1 text-sm text-slate-500">This request has no description.</p>
+      } @else {
+        <app-code-diff-editor
+          class="mt-1 min-h-48 flex-1 overflow-hidden rounded border border-slate-300"
+          ariaLabel="Request description"
+          [original]="a.description"
+          [modified]="b.description"
+          language="markdown"
+          [sideBySide]="sideBySide()"
+        />
+      }
+    }
   }
 </section>
 

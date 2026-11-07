@@ -56,6 +56,35 @@ public class RequestYamlSerializerTests
             RequestYamlSerializer.Serialize(request));
     }
 
+    [Fact]
+    public void Serialize_WritesTheDescriptionLastAsABlock()
+    {
+        var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1", body: new RequestBody(BodyType.Text, "x"))
+        {
+            Description = "# Get user\n\nReturns *one* user.\n",
+        };
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Get user
+            method: GET
+            url: /users/1
+            body:
+              type: text
+              content: x
+            description: |
+              # Get user
+
+              Returns *one* user.
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(request.Description, RequestYamlSerializer.Deserialize(yaml, "x").Description);
+        Assert.Equal(string.Empty, RequestYamlSerializer.Deserialize("name: a\n", "x").Description);
+    }
+
     [Theory]
     [InlineData("plain text")]
     [InlineData("")]

@@ -23,6 +23,7 @@
     "@fortawesome/angular-fontawesome": "^5.1.0",
     "@fortawesome/fontawesome-svg-core": "^7.3.1",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
+    "marked": "18.1.1",
     "monaco-editor": "0.57.0",
     "pdfjs-dist": "6.4.299",
     "rxjs": "~7.8.0",

@@ -38,6 +38,8 @@ export interface RequestContent {
   auth: RequestAuth;
   bodyType: BodyType;
   body: string;
+  /** Notes about the request, in Markdown. */
+  description: string;
 }
 
 /** The outcome of the last send of a request: its response, or why there is none. */

@@ -44,6 +44,7 @@ export class MockBackend {
         headers: [{ key: 'Content-Type', value: 'application/json', enabled: true }],
         auth: { type: 'bearer', token: '{{apiToken}}' },
         body: { type: 'json', content: '{\n  "name": "Ada Lovelace"\n}\n' },
+        description: 'Creates a user.\n\n- Needs a **bearer token** (`apiToken`).\n',
       }),
     ],
     ['orders/list-orders.yaml', sample('List orders', 'GET', '{{baseUrl}}/orders')],

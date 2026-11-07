@@ -16,7 +16,10 @@ public class ExportFormatTests
         [new KeyValueEntry("notify", "yes & no"), new KeyValueEntry("debug", "1", Enabled: false)],
         [new KeyValueEntry("X-Tenant", "{{tenant}}")],
         new BearerAuth("{{token}}"),
-        new RequestBody(BodyType.Json, "{\n  \"name\": \"Ada\"\n}"));
+        new RequestBody(BodyType.Json, "{\n  \"name\": \"Ada\"\n}"))
+    {
+        Description = "Creates a user.\n\n- Needs the `admin` role.",
+    };
 
     private static readonly HttpRequestDefinition Login = new(
         "Log in",
@@ -74,6 +77,18 @@ public class ExportFormatTests
         var environment = JsonNode.Parse(environmentFile.Content)!;
         Assert.Equal("secret", (string?)environment["values"]![1]!["type"]);
         Assert.Equal(string.Empty, (string?)environment["values"]![1]!["value"]);
+    }
+
+    [Fact]
+    public void Exports_WriteDescriptionsOnlyWhenThereAreSome()
+    {
+        var postman = JsonNode.Parse(new PostmanCollectionExporter().Export(Collection).Content)!;
+        Assert.Equal(CreateUser.Description, (string?)postman["item"]![0]!["item"]![1]!["request"]!["description"]);
+        Assert.Null(postman["item"]![1]!["request"]!["description"]);
+
+        var insomnia = JsonNode.Parse(new InsomniaExporter().Export(Collection).Content)!["resources"]!.AsArray();
+        Assert.Equal(CreateUser.Description, (string?)insomnia.Single(r => (string?)r!["name"] == "Create user")!["description"]);
+        Assert.Null(insomnia.Single(r => (string?)r!["name"] == "Log in")!["description"]);
     }
 
     [Fact]
@@ -141,6 +156,7 @@ public class ExportFormatTests
             Assert.Equal(want.Headers, got.Headers);
             Assert.Equal(want.Auth, got.Auth);
             Assert.Equal(want.Body, got.Body);
+            Assert.Equal(want.Description, got.Description);
         }
 
         for (var i = 0; i < expected.Folders.Count; i++)

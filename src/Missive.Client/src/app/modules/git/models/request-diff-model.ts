@@ -11,6 +11,7 @@ export const EMPTY_REQUEST: RequestContent = {
   auth: EMPTY_AUTH,
   bodyType: 'none',
   body: '',
+  description: '',
 };
 
 /** How one row of a params or headers table changed. */
@@ -140,6 +141,7 @@ export interface RequestChanges {
   headers: number;
   auth: boolean;
   body: boolean;
+  docs: boolean;
 }
 
 /** What differs between two versions of a request, section by section. */
@@ -158,5 +160,6 @@ export function requestChanges(before: RequestContent, after: RequestContent): R
     body:
       before.bodyType !== after.bodyType ||
       (after.bodyType !== 'none' && before.body !== after.body),
+    docs: before.description !== after.description,
   };
 }

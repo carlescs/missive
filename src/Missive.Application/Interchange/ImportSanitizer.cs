@@ -33,6 +33,7 @@ internal static class ImportSanitizer
             Name = name.Length > MaxNameLength ? name[..MaxNameLength].TrimEnd() : name,
             Params = Entries(request.Params, "query parameter", StringComparer.Ordinal, name, warnings),
             Headers = Entries(request.Headers, "header", StringComparer.OrdinalIgnoreCase, name, warnings),
+            Description = Description(request.Description),
         };
 
         var errors = cleaned.Validate();
@@ -43,6 +44,13 @@ internal static class ImportSanitizer
         }
 
         return cleaned;
+    }
+
+    /// <summary>Descriptions are saved with LF line endings, and blank ones are left out.</summary>
+    private static string Description(string description)
+    {
+        var text = description.ReplaceLineEndings("\n").Trim('\n');
+        return string.IsNullOrWhiteSpace(text) ? string.Empty : text;
     }
 
     public static EnvironmentDefinition Environment(EnvironmentDefinition environment, List<string> warnings)

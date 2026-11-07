@@ -171,7 +171,10 @@ internal static partial class InsomniaFormat
             parameters,
             InterchangeText.WithoutImpliedContentType(headers, body.Type),
             ImportAuth(resource.Obj("authentication"), name, warnings),
-            body);
+            body)
+        {
+            Description = resource.Str("description") ?? string.Empty,
+        };
 
         var converted = InterchangeText.MapText(request, FromInsomnia);
         if (TemplateTag().IsMatch(converted.Url + converted.Body.Content + string.Join(' ', converted.Headers.Select(h => h.Value))))
@@ -363,6 +366,11 @@ internal static partial class InsomniaFormat
                 ["body"] = ExportBody(request.Body),
                 ["metaSortKey"] = order++,
             };
+            if (original.Description.Length > 0)
+            {
+                resource["description"] = original.Description;
+            }
+
             resources.Add(resource);
         }
     }

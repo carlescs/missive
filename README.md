@@ -53,6 +53,7 @@ until you allow it in *System Settings* → *Privacy & Security*.
 - [x] Create, rename, duplicate and delete (nested) collection folders, and move
       requests and folders between them with drag and drop
 - [x] Duplicate requests, and reopen recently used workspaces
+- [x] Request descriptions in Markdown (a **Docs** tab), imported and exported
 - [x] Request editor: method, URL, query parameters, headers, auth and body
       (JSON, raw text, form-data, `x-www-form-urlencoded`), saved as YAML files
 - [x] Sending requests
@@ -112,7 +113,7 @@ body:
 ```
 
 Keys are always written in this order — `name`, `method`, `url`, `params`,
-`headers`, `auth`, `body` — and empty sections are left out. Query parameters
+`headers`, `auth`, `body`, `description` — and empty sections are left out. Query parameters
 use the same `name: value` form as headers. A parameter or header that is
 disabled in the editor is kept in the file with a `~` prefix (so names cannot
 start with `~`):
@@ -128,6 +129,21 @@ Auth types are `basic` (`username`, `password`), `bearer` (`token`) and
 instead of a header). Body types are `json`, `text`, `form` and `urlencoded`.
 `form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
 `urlencoded` values are sent as written, so percent-encode them yourself.
+
+`description` holds notes about the request in Markdown, edited in the request
+editor's **Docs** tab (with an **Edit** and a **Preview** mode). It is written
+last, as a block, so the docs live next to the request in git:
+
+```yaml
+description: |
+  Creates a user. Needs the `admin` role.
+
+  Returns `409` when the email is taken.
+```
+
+The preview renders GitHub-flavored Markdown but shows raw HTML as text and
+images as their alt text, and links are not followed, so nothing is loaded from
+the network.
 
 New requests are saved as a file named after the request (`Create user` →
 `create-user.yaml`, or `create-user-2.yaml` if that name is taken). Renaming a
@@ -308,6 +324,9 @@ content, in JSON or YAML:
 | HAR 1.2 (browser dev tools) | One request per entry, in a folder per host, without connection headers such as `Host`. |
 | OpenAPI 3.x / Swagger 2.0 | One request per operation, in a folder per tag, with example values for parameters and an example JSON body built from the schema. Each server becomes an environment defining `{{baseUrl}}`; security schemes become Basic, Bearer or API key auth using secret `{{username}}`/`{{password}}`, `{{token}}` or `{{apiKey}}` variables, which you fill in. Path parameters without an example become `{{variables}}`. |
 
+Request descriptions are imported from Postman and Insomnia, and from an
+OpenAPI operation's `description` (its `summary` names the request).
+
 Imported requests are saved as ordinary request files in a new folder named
 after the collection (`Shop`, or `Shop 2` if that name is taken), and
 environments as new environment files; nothing that already exists is changed.
@@ -327,7 +346,8 @@ workspace to a file you choose:
 - **Insomnia v4** (`.insomnia.json`), a single file with the requests and the
   environments, using Insomnia's `{{ _.name }}` references.
 
-Untick **Include environments** to export only the requests. Secret values are
+Request descriptions are exported too. Untick **Include environments** to
+export only the requests. Secret values are
 never exported: secret variables are exported with empty values (as `secret`
 variables in Postman). Request files that can't be read are skipped and
 reported. Exporting the same workspace again produces the same file, so
@@ -359,7 +379,7 @@ configuration, hooks and credential helpers apply as usual. In detail:
 - **Diff**: click a changed file to see what changed since the last commit.
   A request file can be shown as a **Request** — laid out like the request
   editor, read-only, with the changed name, method, URL, params, headers, auth
-  fields and body marked — or as **Text**, its YAML side by side (or inline).
+  fields, body and description marked — or as **Text**, its YAML side by side (or inline).
   Other files, and request files that can't be read as requests, are shown as
   text; binary files are not shown. Viewing a diff never stages anything.
 - **Commit** stages and commits every change in the workspace, or only the files

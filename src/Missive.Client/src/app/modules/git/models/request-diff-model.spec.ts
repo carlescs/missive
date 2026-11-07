@@ -111,6 +111,7 @@ describe('request diff model', () => {
         headers: 0,
         auth: false,
         body: false,
+        docs: false,
       });
     });
 
@@ -123,6 +124,7 @@ describe('request diff model', () => {
         auth: { ...EMPTY_AUTH, type: 'bearer', token: 't' },
         bodyType: 'json',
         body: '{}',
+        description: 'Now documented.',
       });
       expect(changed).toEqual({
         name: false,
@@ -131,6 +133,7 @@ describe('request diff model', () => {
         headers: 1,
         auth: true,
         body: true,
+        docs: true,
       });
     });
 

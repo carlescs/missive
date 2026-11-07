@@ -1,4 +1,12 @@
-import { Component, ElementRef, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+} from '@angular/core';
 import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faBan, faFloppyDisk, faPaperPlane, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import {
@@ -21,12 +29,20 @@ import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { KeyValueTable } from '../../../../components/key-value-table/key-value-table';
 import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
+import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
 
-type RequestTab = 'params' | 'headers' | 'auth' | 'body';
+type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'docs';
 
 @Component({
   selector: 'app-request-editor',
-  imports: [FaIconComponent, KeyValueTable, ResponseViewer, CodeEditor, VariableInput],
+  imports: [
+    FaIconComponent,
+    KeyValueTable,
+    ResponseViewer,
+    CodeEditor,
+    VariableInput,
+    MarkdownView,
+  ],
   host: { class: 'flex min-h-0 flex-1 flex-col' },
   templateUrl: './request-editor.html',
 })
@@ -42,7 +58,18 @@ export class RequestEditor {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'body', label: 'Body' },
+    { id: 'docs', label: 'Docs' },
   ];
+
+  /** Whether the Docs tab shows the Markdown source; by default only an empty description is edited. */
+  private readonly documentId = computed(() => this.document().id);
+  private readonly docsEditing = linkedSignal<string, boolean | null>({
+    source: this.documentId,
+    computation: () => null,
+  });
+  protected readonly editingDocs = computed(
+    () => this.docsEditing() ?? !this.document().description.trim(),
+  );
 
   protected readonly urlPlaceholder = 'https://api.example.com/users or {{baseUrl}}/users';
   protected readonly methods = HTTP_METHODS;
@@ -112,6 +139,10 @@ export class RequestEditor {
 
   protected cancel(): void {
     void this.store.cancelSend(this.document().id);
+  }
+
+  protected setEditingDocs(editing: boolean): void {
+    this.docsEditing.set(editing);
   }
 
   protected count(doc: RequestDocument, tab: RequestTab): number {

@@ -42,6 +42,7 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     },
     bodyType: BODY_TYPES.includes(dto.body.type) ? dto.body.type : 'none',
     body: dto.body.content,
+    description: dto.description ?? '',
   };
 }
 
@@ -63,6 +64,7 @@ export function toRequestDto(content: RequestContent): RequestDto {
             ? { type: 'apiKey', key: auth.key, value: auth.value, in: auth.in }
             : { type: 'none' },
     body: { type: content.bodyType, content: content.bodyType === 'none' ? '' : content.body },
+    description: content.description,
   };
 }
 

@@ -35,6 +35,9 @@ public sealed record HttpRequestDefinition
 
     public RequestBody Body { get; init; }
 
+    /// <summary>Notes about the request, in Markdown; empty when there are none.</summary>
+    public string Description { get; init; } = string.Empty;
+
     /// <summary>
     /// Request files mark disabled parameters and headers with this prefix, so names cannot start
     /// with it.

@@ -78,6 +78,41 @@ public class ImportFormatTests
     }
 
     [Fact]
+    public void Postman_ReadsDescriptionsAsTextOrObjects()
+    {
+        var parsed = Parse("""
+            {
+              "info": { "name": "Docs", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+              "item": [
+                { "name": "Text", "request": { "method": "GET", "url": "https://x.test/a", "description": "Lists *things*." } },
+                { "name": "Object", "request": { "method": "GET", "url": "https://x.test/b",
+                  "description": { "content": "# B", "type": "text/markdown" } } },
+                { "name": "On item", "description": "Old style.", "request": { "method": "GET", "url": "https://x.test/c" } },
+                { "name": "None", "request": { "method": "GET", "url": "https://x.test/d" } }
+              ]
+            }
+            """);
+
+        Assert.Equal(["Lists *things*.", "# B", "Old style.", ""], parsed.Collection.Root.Requests.Select(r => r.Description));
+    }
+
+    [Fact]
+    public void OpenApi_ReadsOperationDescriptions()
+    {
+        var parsed = Parse("""
+            {
+              "openapi": "3.0.0",
+              "info": { "title": "Pets", "version": "1" },
+              "paths": { "/pets": { "get": { "summary": "List pets", "description": "Returns **all** pets." } } }
+            }
+            """);
+
+        var list = Assert.Single(parsed.Collection.Root.Folders.SelectMany(f => f.Requests).Concat(parsed.Collection.Root.Requests));
+        Assert.Equal("List pets", list.Name);
+        Assert.Equal("Returns **all** pets.", list.Description);
+    }
+
+    [Fact]
     public void Postman_InheritsAuthFromFoldersAndHonorsNoAuth()
     {
         var parsed = Parse("""

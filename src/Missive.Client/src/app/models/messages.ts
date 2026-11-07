@@ -32,6 +32,8 @@ export interface RequestDto {
   headers: KeyValueDto[];
   auth: AuthDto;
   body: BodyDto;
+  /** Notes about the request, in Markdown; empty or missing when there are none. */
+  description?: string | null;
 }
 
 export interface SavedRequestDto {
