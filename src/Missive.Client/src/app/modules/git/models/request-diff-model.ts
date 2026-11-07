@@ -12,6 +12,7 @@ export const EMPTY_REQUEST: RequestContent = {
   bodyType: 'none',
   body: '',
   description: '',
+  captures: [],
 };
 
 /** How one row of a params or headers table changed. */

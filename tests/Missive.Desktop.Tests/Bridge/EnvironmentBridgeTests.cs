@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Environments;
 using Missive.Application.Workspaces;
@@ -17,6 +18,7 @@ public sealed class EnvironmentBridgeTests : IDisposable
     private readonly IEnvironmentStore _store = Substitute.For<IEnvironmentStore>();
     private readonly ISecretStore _secrets = Substitute.For<ISecretStore>();
     private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
+    private readonly ICapturedValueStore _captures = Substitute.For<ICapturedValueStore>();
     private readonly ServiceProvider _services;
     private readonly BridgeRouter _router;
 
@@ -33,11 +35,23 @@ public sealed class EnvironmentBridgeTests : IDisposable
                     ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "abc" },
                 }));
 
+        _captures.LoadAsync(Root, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                new Dictionary<string, IReadOnlyDictionary<string, string>>
+                {
+                    ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "t", ["etag"] = "e" },
+                }));
+        _captures.SaveAsync(Root, Arg.Any<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>(), Arg.Any<CancellationToken>())
+            .Returns(Unit.Value);
+
         _services = new ServiceCollection()
             .AddSingleton(current)
             .AddSingleton(_store)
             .AddSingleton(_secrets)
             .AddSingleton(_state)
+            .AddSingleton(_captures)
+            .AddTransient<ListCapturedValues>()
+            .AddTransient<ClearCapturedValues>()
             .AddTransient<ListEnvironments>()
             .AddTransient<LoadEnvironment>()
             .AddTransient<SelectEnvironment>()
@@ -46,6 +60,22 @@ public sealed class EnvironmentBridgeTests : IDisposable
     }
 
     public void Dispose() => _services.Dispose();
+
+    [Fact]
+    public async Task CapturedValues_AreListedAndCleared()
+    {
+        var list = await SendAsync("capture.list", """{ "environment": "dev.yaml" }""");
+        Assert.True(list.GetProperty("ok").GetBoolean(), list.ToString());
+        Assert.Equal(["etag", "token"], list.GetProperty("payload").EnumerateArray().Select(v => v.GetProperty("name").GetString()));
+
+        var cleared = await SendAsync("capture.clear", """{ "environment": "dev.yaml", "name": "token" }""");
+        Assert.True(cleared.GetProperty("ok").GetBoolean(), cleared.ToString());
+        Assert.Equal("etag", cleared.GetProperty("payload")[0].GetProperty("name").GetString());
+        await _captures.Received(1).SaveAsync(
+            Root,
+            Arg.Is<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>(v => v["dev.yaml"].Count == 1),
+            Arg.Any<CancellationToken>());
+    }
 
     [Fact]
     public async Task List_ReturnsTheActiveEnvironment()

@@ -4,15 +4,15 @@
   <h2 class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Response</h2>
   @if (response(); as r) {
     <div class="flex gap-4" role="tablist">
-      @for (tab of tabs; track tab.id) {
+      @for (tab of tabsFor(r); track tab.id) {
         <button
           type="button"
           role="tab"
           class="-mb-px border-b-2 py-1 text-slate-500 hover:text-slate-800"
-          [class.border-sky-500]="activeTab() === tab.id"
-          [class.text-slate-900]="activeTab() === tab.id"
-          [class.border-transparent]="activeTab() !== tab.id"
-          [attr.aria-selected]="activeTab() === tab.id"
+          [class.border-sky-500]="shownTab() === tab.id"
+          [class.text-slate-900]="shownTab() === tab.id"
+          [class.border-transparent]="shownTab() !== tab.id"
+          [attr.aria-selected]="shownTab() === tab.id"
           (click)="activeTab.set(tab.id)"
         >
           {{ tab.label }}
@@ -108,7 +108,7 @@
         The response is too large; only the first {{ formatSize(r.size) }} are shown.
       </p>
     }
-    @switch (activeTab()) {
+    @switch (shownTab()) {
       @case ('body') {
         @if (r.bodyEncoding === 'base64') {
           @if (isPdf()) {
@@ -215,6 +215,41 @@
           } @else {
             <p class="py-6 text-center text-sm text-slate-400">The response set no cookies.</p>
           }
+        </div>
+      }
+      @case ('captures') {
+        <div class="min-h-0 flex-1 overflow-auto px-4 py-2">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-500">
+              <tr>
+                <th class="py-1 pr-4 font-medium">Variable</th>
+                <th class="py-1 pr-4 font-medium">From</th>
+                <th class="py-1 font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (capture of r.captures; track $index) {
+                <tr class="border-t border-slate-200 align-top">
+                  <td class="py-1 pr-4 font-mono font-semibold whitespace-nowrap text-slate-700">
+                    {{ capture.variable }}
+                  </td>
+                  <td class="py-1 pr-4 font-mono whitespace-nowrap text-slate-500">
+                    {{ capture.expression }}
+                  </td>
+                  @if (capture.value != null) {
+                    <td class="py-1 font-mono break-all text-slate-800 select-text">
+                      {{ capture.value }}
+                    </td>
+                  } @else {
+                    <td class="py-1 text-amber-700">{{ capture.error }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+          <p class="mt-2 text-xs text-slate-500">
+            Captured values are stored for the selected environment, on this computer only.
+          </p>
         </div>
       }
       @case ('timing') {

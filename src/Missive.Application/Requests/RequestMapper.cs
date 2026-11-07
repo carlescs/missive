@@ -14,7 +14,8 @@ public static class RequestMapper
         request.Headers.Select(ToDto).ToList(),
         ToDto(request.Auth),
         new BodyDto(BodyTypeName(request.Body.Type), request.Body.Content),
-        request.Description);
+        request.Description,
+        request.Captures.Select(c => new CaptureDto(c.Variable, c.Expression)).ToList());
 
     /// <summary>
     /// Builds a valid domain request from a DTO. Rows with neither key nor value (the blank row the
@@ -48,6 +49,10 @@ public static class RequestMapper
             bodyType == BodyType.None ? RequestBody.None : new RequestBody(bodyType, dto.Body!.Content ?? string.Empty))
         {
             Description = NormalizeDescription(dto.Description),
+            Captures = (dto.Captures ?? [])
+                .Where(c => !string.IsNullOrWhiteSpace(c.Variable) || !string.IsNullOrWhiteSpace(c.Expression))
+                .Select(c => new CaptureRule((c.Variable ?? string.Empty).Trim(), (c.Expression ?? string.Empty).Trim()))
+                .ToList(),
         };
 
         var errors = request.Validate();

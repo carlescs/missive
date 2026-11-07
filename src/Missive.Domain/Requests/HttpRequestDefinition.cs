@@ -35,6 +35,9 @@ public sealed record HttpRequestDefinition
 
     public RequestBody Body { get; init; }
 
+    /// <summary>Values to store in variables from a successful response, in order.</summary>
+    public IReadOnlyList<CaptureRule> Captures { get; init; } = [];
+
     /// <summary>Notes about the request, in Markdown; empty when there are none.</summary>
     public string Description { get; init; } = string.Empty;
 
@@ -59,8 +62,33 @@ public sealed record HttpRequestDefinition
 
         CheckEntries(Params, "parameter", StringComparer.Ordinal, errors);
         CheckEntries(Headers, "header", StringComparer.OrdinalIgnoreCase, errors);
+        CheckCaptures(Captures, errors);
 
         return errors;
+    }
+
+    private static void CheckCaptures(IReadOnlyList<CaptureRule> captures, List<string> errors)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var capture in captures)
+        {
+            if (string.IsNullOrWhiteSpace(capture.Variable))
+            {
+                errors.Add("Every capture needs a variable name.");
+            }
+            else if (!VariableTemplate.IsValidName(capture.Variable))
+            {
+                errors.Add($"'{capture.Variable}' is not a valid variable name: it can't contain spaces or braces.");
+            }
+            else if (!seen.Add(capture.Variable))
+            {
+                errors.Add($"The variable '{capture.Variable}' is captured more than once.");
+            }
+            else if (!CaptureExpression.TryParse(capture.Expression, out _, out var error))
+            {
+                errors.Add($"Capture '{capture.Variable}': {error}");
+            }
+        }
     }
 
     private static void CheckEntries(

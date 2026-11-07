@@ -240,6 +240,24 @@
         />
       }
     }
+    @case ('capture') {
+      <p class="mb-2 text-xs text-slate-500">
+        After a successful (2xx) response, store values in variables of the selected environment, to
+        use in other requests as <code>{{ captureExample }}</code
+        >. Use a JSONPath into the JSON body (<code>$.access_token</code>,
+        <code>$.data.items[0].id</code>) or a header (<code>header:ETag</code>). Captured values
+        stay on this computer, in <code>.missive/</code>, and take precedence over the environment's
+        values.
+      </p>
+      <app-key-value-table
+        keyLabel="Variable"
+        valueLabel="From"
+        valuePlaceholder="$.access_token or header:ETag"
+        [toggleable]="false"
+        [rows]="captureRows(doc)"
+        (rowsChange)="patchCaptures($event)"
+      />
+    }
     @case ('docs') {
       <div class="flex items-center gap-3 text-sm">
         <div class="flex overflow-hidden rounded border border-slate-300" role="group">

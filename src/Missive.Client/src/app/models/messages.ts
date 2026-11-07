@@ -24,6 +24,13 @@ export interface BodyDto {
   content: string;
 }
 
+/** Stores a value from a successful response in a variable of the selected environment. */
+export interface CaptureDto {
+  variable: string;
+  /** A JSONPath into the JSON body (`$.access_token`) or a header (`header:ETag`). */
+  expression: string;
+}
+
 export interface RequestDto {
   name: string;
   method: string;
@@ -34,6 +41,8 @@ export interface RequestDto {
   body: BodyDto;
   /** Notes about the request, in Markdown; empty or missing when there are none. */
   description?: string | null;
+  /** Values to capture from a successful response. */
+  captures?: CaptureDto[] | null;
 }
 
 export interface SavedRequestDto {
@@ -67,6 +76,22 @@ export interface ResponseDto {
   sent?: SentRequestDto | null;
   /** The cookies set by this response and by the redirects before it. */
   cookies?: ResponseCookieDto[] | null;
+  /** What the request's capture rules did; missing when it has none. */
+  captures?: CaptureResultDto[] | null;
+}
+
+/** What one capture rule did: `value` is set when it was captured and stored, `error` otherwise. */
+export interface CaptureResultDto {
+  variable: string;
+  expression: string;
+  value: string | null;
+  error?: string | null;
+}
+
+/** A value a request captured for an environment, kept on this computer. */
+export interface CapturedValueDto {
+  name: string;
+  value: string;
 }
 
 /**
@@ -431,6 +456,13 @@ export interface BridgeMessages {
   };
   /** Deletes every cookie kept for an environment. */
   'cookie.clear': { payload: { environment: string }; result: null };
+  /** The values requests captured for an environment, sorted by name. */
+  'capture.list': { payload: { environment: string }; result: CapturedValueDto[] };
+  /** Forgets one captured value (or all, without `name`); the result is what is left. */
+  'capture.clear': {
+    payload: { environment: string; name?: string };
+    result: CapturedValueDto[];
+  };
   /** Creates a folder inside `parent` (`''` is the workspace root). */
   'folder.create': { payload: { parent: string; name: string }; result: FolderDto };
   /** Renames a folder within its parent; the result is its new path. */

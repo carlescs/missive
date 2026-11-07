@@ -8,7 +8,7 @@ namespace Missive.Infrastructure.Yaml;
 /// <summary>
 /// Reads and writes request files. Keys are always written in the same order
 /// (<c>name</c>, <c>method</c>, <c>url</c>, <c>params</c>, <c>headers</c>, <c>auth</c>,
-/// <c>body</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
+/// <c>body</c>, <c>capture</c>, <c>description</c>) and empty or default values are omitted. Disabled params and headers are written
 /// with a <c>~</c> prefix on their name.
 /// </summary>
 public static class RequestYamlSerializer
@@ -34,6 +34,17 @@ public static class RequestYamlSerializer
                 if (request.Body.Content.Length > 0)
                 {
                     body.Scalar("content", request.Body.Content);
+                }
+            });
+        }
+
+        if (request.Captures.Count > 0)
+        {
+            writer.Mapping("capture", map =>
+            {
+                foreach (var capture in request.Captures)
+                {
+                    map.Scalar(capture.Variable, capture.Expression);
                 }
             });
         }
@@ -87,6 +98,7 @@ public static class RequestYamlSerializer
             ReadAuth(root),
             ReadBody(root))
         {
+            Captures = ReadCaptures(root),
             Description = OptionalString(root, "description") ?? string.Empty,
         };
     }
@@ -171,6 +183,28 @@ public static class RequestYamlSerializer
         }
 
         return entries;
+    }
+
+    private static List<CaptureRule> ReadCaptures(YamlMappingNode root)
+    {
+        var node = Optional(root, "capture");
+        if (node is null || IsNull(node))
+        {
+            return [];
+        }
+
+        if (node is not YamlMappingNode map)
+        {
+            throw new RequestFormatException("'capture' must be a mapping of variable names to JSONPaths or headers.");
+        }
+
+        return map.Children
+            .Select(pair =>
+            {
+                var variable = ScalarText(pair.Key, "capture");
+                return new CaptureRule(variable, ScalarText(pair.Value, $"capture.{variable}"));
+            })
+            .ToList();
     }
 
     private static RequestAuth ReadAuth(YamlMappingNode root)

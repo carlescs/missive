@@ -30,11 +30,13 @@ public sealed record ActiveVariables(
 public sealed class ActiveEnvironment(
     IEnvironmentStore store,
     ISecretStore secrets,
+    ICapturedValueStore captures,
     IWorkspaceStateStore state,
     CurrentWorkspace current)
 {
     /// <summary>
-    /// The selected environment's variables. Without a workspace or a selected environment (or
+    /// The selected environment's variables, with the values requests captured for it taking
+    /// precedence over the file's values. Without a workspace or a selected environment (or
     /// when the selected file no longer exists) there are none. An environment that can't be read
     /// or whose variables refer to each other in a loop is an error.
     /// </summary>
@@ -82,6 +84,21 @@ public sealed class ActiveEnvironment(
             {
                 unset.Add(variable.Name);
             }
+        }
+
+        var captured = await captures.LoadAsync(root, cancellationToken);
+        if (!captured.IsSuccess)
+        {
+            return captured.Error!;
+        }
+
+        if (captured.Value.GetValueOrDefault(id) is { Count: > 0 } capturedValues)
+        {
+            variables.RemoveAll(variable => capturedValues.ContainsKey(variable.Name));
+            unset.ExceptWith(capturedValues.Keys);
+            variables.AddRange(capturedValues
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new EnvironmentVariable(pair.Key, pair.Value)));
         }
 
         var resolved = VariableSet.Resolve(variables);

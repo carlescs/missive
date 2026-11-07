@@ -86,6 +86,15 @@ internal static class BridgeMessageTypes
     /// <summary>Deletes every cookie kept for an environment. Payload: <see cref="CookieJarPayload"/>. Result: none.</summary>
     public const string CookieClear = "cookie.clear";
 
+    /// <summary>Lists the values requests captured for an environment. Payload: <see cref="CapturedValuesPayload"/>. Result: captured values.</summary>
+    public const string CaptureList = "capture.list";
+
+    /// <summary>
+    /// Forgets one captured value of an environment, or all of them when no name is given.
+    /// Payload: <see cref="ClearCapturedValuesPayload"/>. Result: the captured values left.
+    /// </summary>
+    public const string CaptureClear = "capture.clear";
+
     /// <summary>Creates a folder. Payload: <see cref="CreateFolderPayload"/>. Result: folder.</summary>
     public const string FolderCreate = "folder.create";
 
@@ -238,6 +247,12 @@ internal sealed record SavedFileDto(string Path);
 
 /// <param name="Environment">The environment's file name in the <c>environments</c> folder.</param>
 internal sealed record CookieJarPayload(string Environment);
+
+/// <param name="Environment">The environment's file name in the <c>environments</c> folder.</param>
+internal sealed record CapturedValuesPayload(string Environment);
+
+/// <param name="Name">The variable to forget; omitted forgets every captured value.</param>
+internal sealed record ClearCapturedValuesPayload(string Environment, string? Name = null);
 
 internal sealed record DeleteCookiePayload(string Environment, string Name, string Domain, string Path);
 

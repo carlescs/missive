@@ -28,6 +28,8 @@ export function splitVariables(text: string): TextSegment[] {
 export interface VariableInfo {
   value: string;
   secret: boolean;
+  /** Whether the value was captured from a response (and overrides the environment's). */
+  captured?: boolean;
 }
 
 /** The selected environment's variables by name; secrets without a local value are left out. */
@@ -43,5 +45,8 @@ export function describeVariable(name: string, variables: VariableLookup | null)
   if (!variables) return `Variable ${name}`;
   const variable = variables.get(name);
   if (!variable) return `${name} is not defined in the selected environment`;
-  return variable.secret ? `${name}: secret value` : `${name} = ${variable.value}`;
+  const source = variable.captured ? ' (captured)' : '';
+  return variable.secret
+    ? `${name}: secret value${source}`
+    : `${name} = ${variable.value}${source}`;
 }

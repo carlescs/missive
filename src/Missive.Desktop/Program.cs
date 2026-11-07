@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Missive.Application.Captures;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
 using Missive.Application.Folders;
@@ -78,6 +79,7 @@ internal static class Program
             .AddSingleton<ISecretStore, YamlSecretStore>()
             .AddSingleton<IWorkspaceStateStore, YamlWorkspaceStateStore>()
             .AddSingleton<ICookieJarStore, JsonCookieJarStore>()
+            .AddSingleton<ICapturedValueStore, YamlCapturedValueStore>()
             .AddSingleton(TimeProvider.System)
             .AddSingleton<IGitService, GitCliService>()
             .AddSingleton<IRequestFileFormat, YamlRequestFileFormat>()
@@ -113,6 +115,8 @@ internal static class Program
             .AddTransient<ListCookies>()
             .AddTransient<DeleteCookie>()
             .AddTransient<ClearCookies>()
+            .AddTransient<ListCapturedValues>()
+            .AddTransient<ClearCapturedValues>()
             .AddTransient<CreateFolder>()
             .AddTransient<RenameFolder>()
             .AddTransient<MoveFolder>()

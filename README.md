@@ -61,6 +61,8 @@ until you allow it in *System Settings* → *Privacy & Security*.
       with HTML and PDF previews; copy or save the body, cookies set, a timing
       breakdown with redirects, and the request as sent
 - [x] Optional cookie jar per environment (kept out of git)
+- [x] Capture values from responses into variables (JSONPath or header, kept
+      out of git)
 - [ ] Collections as folders, with optional folder-level defaults
 - [x] Environments with `{{variable}}` substitution
 - [x] Auth helpers: Basic, Bearer token and API key
@@ -90,7 +92,7 @@ my-api/
 │   ├── _folder.yaml        # optional folder-level defaults (headers, auth)
 │   ├── get-user.yaml
 │   └── create-user.yaml
-└── .missive/               # local only, git-ignored: secrets, cookies, history, UI state
+└── .missive/               # local only, git-ignored: secrets, cookies, captured values, history, UI state
 ```
 
 A request file:
@@ -113,7 +115,8 @@ body:
 ```
 
 Keys are always written in this order — `name`, `method`, `url`, `params`,
-`headers`, `auth`, `body`, `description` — and empty sections are left out. Query parameters
+`headers`, `auth`, `body`, `capture`, `description` — and empty sections are
+left out. Query parameters
 use the same `name: value` form as headers. A parameter or header that is
 disabled in the editor is kept in the file with a `~` prefix (so names cannot
 start with `~`):
@@ -129,6 +132,18 @@ Auth types are `basic` (`username`, `password`), `bearer` (`token`) and
 instead of a header). Body types are `json`, `text`, `form` and `urlencoded`.
 `form` (multipart) and `urlencoded` bodies hold one `name=value` pair per line;
 `urlencoded` values are sent as written, so percent-encode them yourself.
+
+`capture` stores values from a successful response in variables, so a login
+request can hand its token to the requests after it — declaratively, without
+scripts:
+
+```yaml
+capture:
+  token: $.access_token    # a JSONPath into the JSON body
+  etag: header:ETag        # a response header
+```
+
+See [Capturing response values](#capturing-response-values).
 
 `description` holds notes about the request in Markdown, edited in the request
 editor's **Docs** tab (with an **Edit** and a **Preview** mode). It is written
@@ -217,6 +232,9 @@ local too, in `.missive/cookies.json`:
 }
 ```
 
+Values that requests capture from responses are local as well, in
+`.missive/captures.yaml`, with the same layout as `secrets.yaml`.
+
 A `domain` with a leading dot (`.example.com`) is a cookie set with a `Domain`
 attribute, sent to that domain and its subdomains; one without (`localhost`
 above) was set without one and is sent to that host only.
@@ -236,8 +254,9 @@ Pick the environment requests are sent with from the header, or from the
 editor tab, next to the open requests: its name, and a table of variables, each
 of which can be marked **Secret**. New environments are saved as a file named after them
 (`Staging` → `staging.yaml`); renaming one renames its file too, unless the file
-name was chosen by hand, and its secret values, cookies and selection follow.
-Deleting an environment also removes its stored secret values and cookies.
+name was chosen by hand, and its secret values, cookies, captured values and
+selection follow. Deleting an environment also removes its stored secret values,
+cookies and captured values.
 
 **Keep cookies between requests** turns on the environment's cookie jar (off by
 default). Cookies that responses set, including redirects on the way, are then
@@ -306,6 +325,38 @@ or zoomed, with selectable text), images are previewed, and other binary bodies
 are not shown (use **Save** to get them). Bodies over 20 MB are cut off. Responses are kept in memory per open
 request only; nothing is written to the workspace. The bodies of the latest
 responses (up to 64 MB in all) are kept by the backend so they can be saved.
+
+## Capturing response values
+
+A request's **Capture** tab lists variables to fill from its response: each
+row names a variable and where its value comes from, either a JSONPath into the
+JSON body or a header:
+
+| From | Captures |
+| --- | --- |
+| `$.access_token` | the `access_token` property of the body |
+| `$.data.items[0].id`, `$['odd key']` | nested properties and array items |
+| `$` | the whole body |
+| `header:ETag` | the first `ETag` header (names are case-insensitive) |
+
+Only that subset of JSONPath is supported — no wildcards, filters or recursive
+descent — so a capture always names a single value. Strings are captured as
+they are, numbers and booleans as written, and objects and arrays as compact
+JSON; a `null` or missing value captures nothing.
+
+After a successful (2xx) response, the captured values are stored for the
+selected environment, on this computer only (`.missive/captures.yaml`), never in
+tracked files. They take precedence over the environment's own values of the
+same variables, so the next requests use `{{token}}` straight away; hovering a
+reference says when its value was captured, and a captured value of a secret
+variable is masked like any secret. Responses with another status capture
+nothing, so an error never overwrites a good token, and without a selected
+environment nothing is stored. The response's **Captures** tab shows what each
+rule captured, or why it captured nothing. The environment editor lists the
+captured values, where each can be forgotten (bringing back the environment's
+value), or all at once.
+
+Captures are not imported or exported: other tools express them as scripts.
 
 ## Import and export
 

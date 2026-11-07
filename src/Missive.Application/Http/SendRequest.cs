@@ -1,3 +1,4 @@
+using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
@@ -12,8 +13,10 @@ namespace Missive.Application.Http;
 /// Sends the request currently in the editor (saved or not) and returns the response. The request
 /// can be cancelled with <see cref="CancelRequest"/> using the same id. <c>{{variable}}</c>
 /// references are resolved with the selected environment. When that environment has a cookie
-/// jar, its cookies are sent and the cookies responses set are kept in it. The raw body is kept in
-/// <see cref="ResponseBodies"/> under the same id, for <see cref="SaveResponseBody"/>.
+/// jar, its cookies are sent and the cookies responses set are kept in it. The values the
+/// request's capture rules pick out of a successful response are stored for that environment in
+/// <see cref="ICapturedValueStore"/>. The raw body is kept in <see cref="ResponseBodies"/> under
+/// the same id, for <see cref="SaveResponseBody"/>.
 /// </summary>
 public sealed class SendRequest(
     IHttpSender sender,
@@ -21,6 +24,7 @@ public sealed class SendRequest(
     ActiveEnvironment environment,
     ResponseBodies bodies,
     ICookieJarStore cookieJars,
+    ICapturedValueStore captures,
     CurrentWorkspace current,
     TimeProvider time)
 {
@@ -85,6 +89,14 @@ public sealed class SendRequest(
 
             var masking = Masking.For(definition.Value.Auth, variables.Value);
             var dto = ToDto(response.Value, outgoing.Url, masking, time.GetUtcNow());
+            if (definition.Value.Captures.Count > 0)
+            {
+                dto = dto with
+                {
+                    Captures = await CaptureAsync(definition.Value.Captures, response.Value, dto, root, variables.Value.EnvironmentId),
+                };
+            }
+
             bodies.Add(id, new StoredBody(response.Value.Body, dto.FileName));
             return dto;
         }
@@ -96,6 +108,69 @@ public sealed class SendRequest(
         {
             inFlight.Finish(id);
         }
+    }
+
+    /// <summary>
+    /// Picks the captured values out of the response and stores them for the environment the
+    /// request was sent with. The response is worth showing even when they can't be stored, so
+    /// failures are reported per capture instead.
+    /// </summary>
+    private async Task<IReadOnlyList<CaptureResultDto>> CaptureAsync(
+        IReadOnlyList<CaptureRule> rules,
+        HttpResponseData response,
+        ResponseDto dto,
+        string? root,
+        string? environmentId)
+    {
+        if (!ResponseCaptures.Applies(response.StatusCode))
+        {
+            var skipped = $"Not captured: values are only captured from successful (2xx) responses, and this one is {response.StatusCode}.";
+            return rules.Select(rule => new CaptureResultDto(rule.Variable, rule.Expression, null, skipped)).ToList();
+        }
+
+        var results = ResponseCaptures.Evaluate(
+            rules,
+            response.Headers,
+            dto.BodyEncoding == ResponseBodyDecoder.Text ? dto.Body : null,
+            response.Truncated);
+        var captured = results.Where(result => result.Value is not null).ToList();
+        if (captured.Count == 0)
+        {
+            return results;
+        }
+
+        string? failure = null;
+        if (environmentId is null)
+        {
+            failure = "Not stored: no environment is selected. Captured values are kept per environment.";
+        }
+        else if (root is null || current.Root != root)
+        {
+            failure = "Not stored: the workspace was closed while the request was being sent.";
+        }
+        else
+        {
+            var stored = await CapturedValues.UpdateAsync(
+                captures,
+                root,
+                environmentId,
+                values =>
+                {
+                    var updated = new Dictionary<string, string>(values, StringComparer.Ordinal);
+                    foreach (var result in captured)
+                    {
+                        updated[result.Variable] = result.Value!;
+                    }
+
+                    return updated;
+                },
+                CancellationToken.None);
+            failure = stored.IsSuccess ? null : $"Not stored: {stored.Error!.Message}";
+        }
+
+        return failure is null
+            ? results
+            : results.Select(result => result.Value is null ? result : result with { Value = null, Error = failure }).ToList();
     }
 
     /// <summary>Explains where the values of undefined variables should come from.</summary>

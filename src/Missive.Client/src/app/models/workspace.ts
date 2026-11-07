@@ -1,4 +1,4 @@
-import { ResponseDto } from './messages';
+import { CaptureDto, ResponseDto } from './messages';
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
@@ -40,6 +40,8 @@ export interface RequestContent {
   body: string;
   /** Notes about the request, in Markdown. */
   description: string;
+  /** Values to capture from a successful response into variables. */
+  captures: CaptureDto[];
 }
 
 /** The outcome of the last send of a request: its response, or why there is none. */

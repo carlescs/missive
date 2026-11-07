@@ -44,6 +44,7 @@ public sealed class SendBridgeTests : IDisposable
             .AddSingleton(TimeProvider.System)
             .AddSingleton(Substitute.For<IEnvironmentStore>())
             .AddSingleton(Substitute.For<ISecretStore>())
+            .AddSingleton(Substitute.For<ICapturedValueStore>())
             .AddSingleton(Substitute.For<IWorkspaceStateStore>())
             .AddTransient<ActiveEnvironment>()
             .AddTransient<SendRequest>()

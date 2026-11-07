@@ -177,6 +177,23 @@ public sealed class EnvironmentStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task CapturedValues_RoundTripInTheirOwnFile()
+    {
+        var store = new YamlCapturedValueStore();
+
+        Assert.True((await store.SaveAsync(_root, new Dictionary<string, IReadOnlyDictionary<string, string>>
+        {
+            ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "t0k", ["etag"] = "\"v1\"" },
+        })).IsSuccess);
+
+        Assert.Equal("\"v1\"", (await store.LoadAsync(_root)).Value["dev.yaml"]["etag"]);
+        Assert.Equal(
+            "# Values captured from responses on this computer. Missive keeps this file out of git.\ndev.yaml:\n  etag: \"\\\"v1\\\"\"\n  token: t0k\n",
+            File.ReadAllText(Path.Combine(_root, ".missive", YamlCapturedValueStore.FileName)));
+        Assert.Empty((await _secrets.LoadAsync(_root)).Value);
+    }
+
+    [Fact]
     public async Task Secrets_InvalidFile_IsReported()
     {
         Write(".missive/secrets.yaml", "dev.yaml: [1, 2]\n");

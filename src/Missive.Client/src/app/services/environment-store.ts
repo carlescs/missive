@@ -1,7 +1,12 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Bridge, BridgeError } from './bridge';
-import { CookieDto, EnvironmentSummaryDto, EnvironmentVariableDto } from '../models/messages';
-import { VariableLookup } from '../models/variables';
+import {
+  CapturedValueDto,
+  CookieDto,
+  EnvironmentSummaryDto,
+  EnvironmentVariableDto,
+} from '../models/messages';
+import { VariableInfo, VariableLookup } from '../models/variables';
 import { WorkspaceStore } from './workspace-store';
 
 /** An environment open in an editor tab. */
@@ -58,6 +63,11 @@ export class EnvironmentStore {
         this.drafts.set([]);
         if (root) void this.refresh();
       });
+    });
+    // Sending a request that captured values changes the selected environment's variables.
+    effect(() => {
+      if (this.workspace.capturesStored() === 0) return;
+      untracked(() => void this.loadVariables(++this.loadCount));
     });
   }
 
@@ -242,6 +252,31 @@ export class EnvironmentStore {
     }
   }
 
+  /** The values requests captured for an environment, or `null` when they can't be read. */
+  async capturedValues(id: string): Promise<CapturedValueDto[] | null> {
+    try {
+      return await this.bridge.send('capture.list', { environment: id });
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
+  }
+
+  /**
+   * Forgets one captured value of an environment, or all of them without `name`; returns what is
+   * left, or `null` on failure.
+   */
+  async clearCaptured(id: string, name?: string): Promise<CapturedValueDto[] | null> {
+    try {
+      const left = await this.bridge.send('capture.clear', { environment: id, name });
+      if (id === this.activeId()) await this.loadVariables(++this.loadCount);
+      return left;
+    } catch (error) {
+      this.report(error);
+      return null;
+    }
+  }
+
   /** Closes a draft's tab, after asking if it has unsaved changes. */
   close(key: string): void {
     const draft = this.drafts().find((d) => d.key === key);
@@ -316,11 +351,21 @@ export class EnvironmentStore {
     if (id) {
       try {
         const environment = await this.bridge.send('environment.load', { id });
-        variables = new Map(
+        const lookup = new Map<string, VariableInfo>(
           environment.variables
             .filter((v) => !v.secret || v.value)
             .map((v) => [v.name, { value: v.value, secret: v.secret }]),
         );
+        // Captured values take precedence, as when sending.
+        const secret = new Set(environment.variables.filter((v) => v.secret).map((v) => v.name));
+        try {
+          for (const c of await this.bridge.send('capture.list', { environment: id })) {
+            lookup.set(c.name, { value: c.value, secret: secret.has(c.name), captured: true });
+          }
+        } catch {
+          // Unreadable captured values are reported when sending.
+        }
+        variables = lookup;
       } catch {
         // An unreadable environment defines nothing; sending explains why.
       }

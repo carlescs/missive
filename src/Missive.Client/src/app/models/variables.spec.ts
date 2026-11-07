@@ -42,6 +42,8 @@ describe('variables', () => {
       expect(describeVariable('host', null)).toBe('Variable host');
       expect(describeVariable('host', lookup)).toBe('host = example.com');
       expect(describeVariable('token', lookup)).toBe('token: secret value');
+      const captured = new Map([['jwt', { value: 'x', secret: false, captured: true }]]);
+      expect(describeVariable('jwt', captured)).toBe('jwt = x (captured)');
       expect(describeVariable('missing', lookup)).toBe(
         'missing is not defined in the selected environment',
       );

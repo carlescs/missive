@@ -55,6 +55,25 @@ public interface ISecretStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Values that requests captured from responses, by environment id and variable name. Like
+/// secrets they stay on this computer, in the workspace's git-ignored <c>.missive</c> folder. They
+/// take precedence over the environment's own value of a variable with the same name.
+/// </summary>
+public interface ICapturedValueStore
+{
+    /// <summary>Loads every captured value; a missing store loads as empty.</summary>
+    Task<Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>> LoadAsync(
+        string root,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Replaces every captured value. Environments without values are left out.</summary>
+    Task<Result<Unit>> SaveAsync(
+        string root,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> values,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>Per-workspace UI state kept on this computer: which environment is selected.</summary>
 /// <param name="ActiveEnvironment">The id of the selected environment, or <c>null</c>.</param>
 public sealed record WorkspaceState(string? ActiveEnvironment = null)

@@ -12,6 +12,7 @@ const content: RequestContent = {
   bodyType: 'json',
   body: '{"name":"Ada"}',
   description: '# Notes',
+  captures: [{ variable: 'token', expression: '$.token' }],
 };
 
 describe('request mapping', () => {
@@ -67,6 +68,7 @@ describe('request mapping', () => {
       expect(result.auth).toEqual(EMPTY_AUTH);
       expect(result.bodyType).toBe('none');
       expect(result.description).toBe('');
+      expect(result.captures).toEqual([]);
       expect(fromRequestDto({ ...dto, method: 'BREW' }).method).toBe('GET');
     });
   });

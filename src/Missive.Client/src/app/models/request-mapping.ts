@@ -43,6 +43,7 @@ export function fromRequestDto(dto: RequestDto): RequestContent {
     bodyType: BODY_TYPES.includes(dto.body.type) ? dto.body.type : 'none',
     body: dto.body.content,
     description: dto.description ?? '',
+    captures: (dto.captures ?? []).map((c) => ({ ...c })),
   };
 }
 
@@ -65,6 +66,7 @@ export function toRequestDto(content: RequestContent): RequestDto {
             : { type: 'none' },
     body: { type: content.bodyType, content: content.bodyType === 'none' ? '' : content.body },
     description: content.description,
+    captures: content.captures.map((c) => ({ ...c })),
   };
 }
 

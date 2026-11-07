@@ -1,0 +1,62 @@
+<div class="mb-1 flex items-center gap-3">
+  <h3
+    class="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase"
+  >
+    <fa-icon [icon]="faFileImport" /> Captured values
+    <span class="font-normal normal-case">({{ values().length }})</span>
+  </h3>
+  <button
+    type="button"
+    class="flex items-center gap-1 text-xs text-sky-700 hover:underline disabled:opacity-50"
+    [disabled]="loading()"
+    (click)="refresh()"
+  >
+    <fa-icon [icon]="faRotate" [animation]="loading() ? 'spin' : undefined" /> Refresh
+  </button>
+  @if (values().length) {
+    <button
+      type="button"
+      class="flex items-center gap-1 text-xs text-rose-700 hover:underline"
+      (click)="clear()"
+    >
+      <fa-icon [icon]="faTrash" /> Clear all
+    </button>
+  }
+</div>
+
+@if (values().length) {
+  <table class="w-full table-fixed border-collapse text-xs">
+    <thead>
+      <tr class="text-left text-slate-500">
+        <th class="w-1/4 px-2 py-1 font-medium">Variable</th>
+        <th class="px-2 py-1 font-medium">Value</th>
+        <th class="w-8"></th>
+      </tr>
+    </thead>
+    <tbody class="font-mono">
+      @for (value of values(); track value.name) {
+        <tr class="border-t border-slate-200 align-top">
+          <td class="truncate px-2 py-1 font-semibold text-slate-700" [title]="value.name">
+            {{ value.name }}
+          </td>
+          <td class="px-2 py-1 break-all text-slate-800 select-text">{{ value.value }}</td>
+          <td class="text-center">
+            <button
+              type="button"
+              class="text-slate-400 hover:text-rose-600"
+              [attr.aria-label]="'Forget ' + value.name"
+              (click)="remove(value)"
+            >
+              <fa-icon [icon]="faTrash" />
+            </button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+} @else if (!loading()) {
+  <p class="text-xs text-slate-400">
+    Nothing captured yet. Requests can capture values from their responses (their Capture tab) into
+    this environment.
+  </p>
+}

@@ -87,6 +87,13 @@ public sealed class ExportWorkspace(
 
         var output = exporter.Export(new RequestCollection(folder, exported));
         warnings.AddRange(output.Warnings);
+        var capturing = CountCapturing(folder);
+        if (capturing > 0)
+        {
+            warnings.Add(capturing == 1
+                ? "1 request captures response values; captures are not exported."
+                : $"{capturing} requests capture response values; captures are not exported.");
+        }
 
         var destination = HasExtension(request.Destination) ? request.Destination : request.Destination + exporter.Extension;
         var written = await files.WriteTextAsync(destination, output.Content, cancellationToken);
@@ -117,6 +124,9 @@ public sealed class ExportWorkspace(
 
         return new ExportResultDto(destination, paths, folder.RequestCount, exported.Count, warnings);
     }
+
+    private static int CountCapturing(CollectionFolder folder) =>
+        folder.Requests.Count(r => r.Captures.Count > 0) + folder.Folders.Sum(CountCapturing);
 
     private static CollectionFolder ToFolder(string name, IReadOnlyList<WorkspaceEntry> entries, List<string> warnings)
     {

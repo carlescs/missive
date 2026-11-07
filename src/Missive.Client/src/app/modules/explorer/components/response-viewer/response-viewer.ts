@@ -25,7 +25,7 @@ import { CodeEditor } from '../../../../components/code-editor/code-editor';
 import { languageForMediaType } from '../../../../components/code-editor/monaco-loader';
 import { previewKind, ResponsePreview } from '../response-preview/response-preview';
 
-type ResponseTab = 'body' | 'headers' | 'cookies' | 'timing' | 'request';
+type ResponseTab = 'body' | 'headers' | 'cookies' | 'captures' | 'timing' | 'request';
 
 /** One bar of the timing waterfall: where it starts and how wide it is, in % of the total. */
 export interface TimingPhase {
@@ -68,9 +68,21 @@ export class ResponseViewer {
     { id: 'body', label: 'Body' },
     { id: 'headers', label: 'Headers' },
     { id: 'cookies', label: 'Cookies' },
+    { id: 'captures', label: 'Captures' },
     { id: 'timing', label: 'Timing' },
     { id: 'request', label: 'Request' },
   ];
+
+  /** The tabs a response offers: Captures only when the request captures values. */
+  protected tabsFor(r: ResponseDto): { id: ResponseTab; label: string }[] {
+    return r.captures?.length ? this.tabs : this.tabs.filter((t) => t.id !== 'captures');
+  }
+
+  /** The tab shown: the one picked, unless this response doesn't offer it. */
+  protected readonly shownTab = computed<ResponseTab>(() => {
+    const tab = this.activeTab();
+    return tab === 'captures' && !this.response()?.captures?.length ? 'body' : tab;
+  });
 
   constructor() {
     inject(DestroyRef).onDestroy(() => clearTimeout(this.noteTimer));
@@ -179,6 +191,7 @@ export class ResponseViewer {
   protected tabCount(tab: ResponseTab, r: ResponseDto): number | null {
     if (tab === 'headers') return r.headers.length;
     if (tab === 'cookies') return r.cookies?.length ?? 0;
+    if (tab === 'captures') return r.captures?.filter((c) => c.value != null).length ?? 0;
     return null;
   }
 

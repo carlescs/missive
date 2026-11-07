@@ -33,6 +33,8 @@ export class WorkspaceStore {
   readonly recent = signal<RecentWorkspaceDto[]>([]);
   /** The last error to show the user, or `null`. */
   readonly error = signal<string | null>(null);
+  /** Incremented whenever a response's captured values were stored, so variables can be re-read. */
+  readonly capturesStored = signal(0);
 
   readonly sidebarOpen = signal(true);
   /** Sidebar width in pixels; kept here so it survives closing and reopening the sidebar. */
@@ -195,6 +197,7 @@ export class WorkspaceStore {
       bodyType: 'none',
       body: '',
       description: '',
+      captures: [],
       dirty: true,
       saving: false,
       sendId: null,
@@ -291,6 +294,7 @@ export class WorkspaceStore {
         request: toRequestDto(doc),
       });
       response = { kind: 'response', response: result, sendId };
+      if (result.captures?.some((c) => c.value != null)) this.capturesStored.update((n) => n + 1);
     } catch (error) {
       response =
         error instanceof BridgeError

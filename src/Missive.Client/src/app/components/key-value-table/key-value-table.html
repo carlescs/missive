@@ -1,25 +1,29 @@
 <table class="w-full table-fixed border-collapse text-sm">
   <thead>
     <tr class="text-left text-xs text-slate-500">
-      <th class="w-8"></th>
+      @if (toggleable()) {
+        <th class="w-8"></th>
+      }
       <th class="px-2 py-1 font-medium">{{ keyLabel() }}</th>
-      <th class="px-2 py-1 font-medium">Value</th>
+      <th class="px-2 py-1 font-medium">{{ valueLabel() }}</th>
       <th class="w-8"></th>
     </tr>
   </thead>
   <tbody>
     @for (row of rowsWithBlank(); track $index; let i = $index; let last = $last) {
       <tr class="border-t border-slate-200">
-        <td class="text-center">
-          @if (!last) {
-            <input
-              type="checkbox"
-              [checked]="row.enabled"
-              [attr.aria-label]="'Enable ' + row.key"
-              (change)="patch(i, { enabled: $any($event.target).checked })"
-            />
-          }
-        </td>
+        @if (toggleable()) {
+          <td class="text-center">
+            @if (!last) {
+              <input
+                type="checkbox"
+                [checked]="row.enabled"
+                [attr.aria-label]="'Enable ' + row.key"
+                (change)="patch(i, { enabled: $any($event.target).checked })"
+              />
+            }
+          </td>
+        }
         <td>
           <input
             class="w-full px-2 py-1 font-mono focus:bg-sky-50 focus:outline-none"
@@ -31,7 +35,7 @@
         <td>
           <input
             class="w-full px-2 py-1 font-mono focus:bg-sky-50 focus:outline-none"
-            placeholder="Value"
+            [placeholder]="valuePlaceholder() ?? valueLabel()"
             [value]="row.value"
             (input)="patch(i, { value: $any($event.target).value })"
           />

@@ -1,3 +1,4 @@
+using Missive.Application.Captures;
 using Missive.Application.Common;
 using Missive.Application.Cookies;
 using Missive.Application.Environments;
@@ -110,6 +111,10 @@ internal static class BridgeHandlers
                 (p, ct) => Use<DeleteCookie>().ExecuteAsync(p.Environment, p.Name, p.Domain, p.Path, ct))
             .Register<CookieJarPayload, Unit?>(BridgeMessageTypes.CookieClear,
                 async (p, ct) => NoValue(await Use<ClearCookies>().ExecuteAsync(p.Environment, ct)))
+            .Register<CapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureList,
+                (p, ct) => Use<ListCapturedValues>().ExecuteAsync(p.Environment, ct))
+            .Register<ClearCapturedValuesPayload, IReadOnlyList<CapturedValueDto>>(BridgeMessageTypes.CaptureClear,
+                (p, ct) => Use<ClearCapturedValues>().ExecuteAsync(p.Environment, p.Name, ct))
             .Register<CreateFolderPayload, FolderDto>(BridgeMessageTypes.FolderCreate,
                 (p, _) => Task.FromResult(Use<CreateFolder>().Execute(p.Parent, p.Name)))
             .Register<RenameFolderPayload, FolderDto>(BridgeMessageTypes.FolderRename,

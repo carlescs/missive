@@ -2,6 +2,9 @@ import {
   Theme,
   BridgeRequestEnvelope,
   BridgeResponseEnvelope,
+  CaptureDto,
+  CaptureResultDto,
+  CapturedValueDto,
   CookieDto,
   ERROR_CODES,
   EnvironmentDto,
@@ -83,6 +86,8 @@ export class MockBackend {
   private readonly bodies = new Map<string, string>();
   /** Cookie jars by environment id. */
   private readonly jars = new Map<string, CookieDto[]>();
+  /** Values requests captured, by environment id and variable name. */
+  private readonly captured = new Map<string, Map<string, string>>();
 
   async handle(request: BridgeRequestEnvelope): Promise<BridgeResponseEnvelope> {
     const ok = (payload: unknown): BridgeResponseEnvelope => ({
@@ -231,10 +236,20 @@ export class MockBackend {
       case 'cookie.clear':
         this.jars.delete(payload?.['environment'] as string);
         return ok(null);
+      case 'capture.list':
+        return ok(this.capturedList(payload?.['environment'] as string));
+      case 'capture.clear': {
+        const id = payload?.['environment'] as string;
+        const name = payload?.['name'] as string | undefined;
+        if (name) this.captured.get(id)?.delete(name);
+        else this.captured.delete(id);
+        return ok(this.capturedList(id));
+      }
       case 'environment.delete': {
         const id = payload?.['id'] as string;
         this.environments.delete(id);
         this.jars.delete(id);
+        this.captured.delete(id);
         if (this.activeEnvironment === id) this.activeEnvironment = null;
         return ok(null);
       }
@@ -466,6 +481,14 @@ export class MockBackend {
         },
       ]);
     }
+    const responseHeaders = [
+      { key: 'Content-Type', value: 'application/json; charset=utf-8' },
+      { key: 'Content-Length', value: String(new TextEncoder().encode(body).length) },
+      setCookie,
+    ];
+    const captures = dto.captures?.length
+      ? dto.captures.map((c) => this.capture(c, responseHeaders, body))
+      : null;
     const durationMs = Math.round(performance.now() - started);
     const segment = url.pathname.split('/').filter(Boolean).pop() ?? 'response';
     const fileName = segment.includes('.') ? segment : `${segment}.json`;
@@ -476,11 +499,7 @@ export class MockBackend {
       payload: {
         status: 200,
         statusText: 'OK',
-        headers: [
-          { key: 'Content-Type', value: 'application/json; charset=utf-8' },
-          { key: 'Content-Length', value: String(new TextEncoder().encode(body).length) },
-          setCookie,
-        ],
+        headers: responseHeaders,
         contentType: 'application/json',
         body,
         bodyEncoding: 'text',
@@ -506,8 +525,52 @@ export class MockBackend {
             httpOnly: true,
           },
         ],
+        captures,
       } satisfies ResponseDto,
     };
+  }
+
+  private capturedList(id: string): CapturedValueDto[] {
+    return [...(this.captured.get(id) ?? [])]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([name, value]) => ({ name, value }));
+  }
+
+  /** A simplified version of the host's capture rules: `header:Name` and `$.a.b[0]` paths. */
+  private capture(
+    rule: CaptureDto,
+    headers: { key: string; value: string }[],
+    body: string,
+  ): CaptureResultDto {
+    const result = (value: string | null, error?: string): CaptureResultDto => ({
+      ...rule,
+      value,
+      error: error ?? null,
+    });
+    const expression = rule.expression.trim();
+    let value: unknown;
+    if (/^header:/i.test(expression)) {
+      const name = expression.slice(7).trim().toLowerCase();
+      value = headers.find((h) => h.key.toLowerCase() === name)?.value;
+    } else if (expression.startsWith('$')) {
+      value = JSON.parse(body);
+      for (const [, key, index] of expression.slice(1).matchAll(/\.([^.[]+)|\[(\d+)\]/g)) {
+        value = (value as Record<string, unknown> | null)?.[key ?? Number(index)];
+      }
+    } else {
+      return result(null, `'${expression}' is neither a JSONPath nor a header.`);
+    }
+    if (value === undefined || value === null) {
+      return result(null, `${expression} matches nothing in the response.`);
+    }
+    if (!this.activeEnvironment) {
+      return result(null, 'Not stored: no environment is selected.');
+    }
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    const values = this.captured.get(this.activeEnvironment) ?? new Map<string, string>();
+    values.set(rule.variable, text);
+    this.captured.set(this.activeEnvironment, values);
+    return result(text);
   }
 
   /** The selected environment's values, with references between variables expanded. */
@@ -516,6 +579,9 @@ export class MockBackend {
     const raw = new Map(
       (env?.variables ?? []).filter((v) => v.value).map((v) => [v.name, v.value]),
     );
+    for (const [name, value] of this.captured.get(this.activeEnvironment ?? '') ?? []) {
+      raw.set(name, value);
+    }
     const resolved = new Map<string, string>();
     const resolve = (name: string, seen: Set<string>): string | undefined => {
       if (resolved.has(name)) return resolved.get(name);

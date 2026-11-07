@@ -3,7 +3,10 @@ import { FaIconComponent } from '@fortawesome/angular-fontawesome';
 import { faTrash } from '@fortawesome/free-solid-svg-icons';
 import { KeyValue } from '../../models/workspace';
 
-/** Editable key/value list (query params, headers). Always shows one empty row for new entries. */
+/**
+ * Editable key/value list (query params, headers, captures). Always shows one empty row for new
+ * entries.
+ */
 @Component({
   selector: 'app-key-value-table',
   imports: [FaIconComponent],
@@ -12,6 +15,10 @@ import { KeyValue } from '../../models/workspace';
 export class KeyValueTable {
   readonly rows = input.required<KeyValue[]>();
   readonly keyLabel = input('Key');
+  readonly valueLabel = input('Value');
+  readonly valuePlaceholder = input<string | null>(null);
+  /** Whether rows can be turned off without deleting them. */
+  readonly toggleable = input(true);
   readonly rowsChange = output<KeyValue[]>();
 
   protected readonly faTrash = faTrash;

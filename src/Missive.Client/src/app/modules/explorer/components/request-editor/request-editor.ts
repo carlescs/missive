@@ -31,7 +31,7 @@ import { ResponseViewer } from '../response-viewer/response-viewer';
 import { VariableInput } from '../../../../components/variable-input/variable-input';
 import { MarkdownView } from '../../../../components/markdown-view/markdown-view';
 
-type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'docs';
+type RequestTab = 'params' | 'headers' | 'auth' | 'body' | 'capture' | 'docs';
 
 @Component({
   selector: 'app-request-editor',
@@ -58,6 +58,7 @@ export class RequestEditor {
     { id: 'headers', label: 'Headers' },
     { id: 'auth', label: 'Auth' },
     { id: 'body', label: 'Body' },
+    { id: 'capture', label: 'Capture' },
     { id: 'docs', label: 'Docs' },
   ];
 
@@ -83,6 +84,7 @@ export class RequestEditor {
   protected readonly faSpinner = faSpinner;
   protected readonly faBan = faBan;
   protected readonly secretExample = '{{apiToken}}';
+  protected readonly captureExample = '{{token}}';
   protected readonly fieldClass =
     'min-w-0 rounded border border-slate-300 px-2 py-1 font-mono focus:border-sky-500 focus:outline-none';
 
@@ -141,6 +143,15 @@ export class RequestEditor {
     void this.store.cancelSend(this.document().id);
   }
 
+  /** The captures as table rows: variable name and expression. */
+  protected captureRows(doc: RequestDocument): KeyValue[] {
+    return doc.captures.map((c) => ({ key: c.variable, value: c.expression, enabled: true }));
+  }
+
+  protected patchCaptures(rows: KeyValue[]): void {
+    this.patch({ captures: rows.map((r) => ({ variable: r.key, expression: r.value })) });
+  }
+
   protected setEditingDocs(editing: boolean): void {
     this.docsEditing.set(editing);
   }
@@ -149,6 +160,7 @@ export class RequestEditor {
     const enabled = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.key).length;
     if (tab === 'params') return enabled(doc.params);
     if (tab === 'headers') return enabled(doc.headers);
+    if (tab === 'capture') return doc.captures.filter((c) => c.variable).length;
     return 0;
   }
 }

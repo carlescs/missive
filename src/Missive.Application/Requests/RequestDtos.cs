@@ -17,6 +17,11 @@ public sealed record AuthDto(
 /// <param name="Type"><c>none</c>, <c>json</c>, <c>text</c>, <c>form</c> or <c>urlencoded</c>.</param>
 public sealed record BodyDto(string Type, string Content);
 
+/// <param name="Variable">The variable the value is stored in.</param>
+/// <param name="Expression">Where the value comes from: a JSONPath (<c>$.token</c>) or <c>header:Name</c>.</param>
+public sealed record CaptureDto(string Variable, string Expression);
+
+/// <param name="Captures">Values to store in variables from a successful response.</param>
 /// <param name="Description">Notes about the request, in Markdown; empty when there are none.</param>
 public sealed record RequestDto(
     string Name,
@@ -26,7 +31,8 @@ public sealed record RequestDto(
     IReadOnlyList<KeyValueDto> Headers,
     AuthDto Auth,
     BodyDto Body,
-    string? Description = null);
+    string? Description = null,
+    IReadOnlyList<CaptureDto>? Captures = null);
 
 /// <summary>A request as stored: its (possibly new) path and its content.</summary>
 public sealed record SavedRequestDto(string Path, RequestDto Request);

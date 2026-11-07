@@ -25,6 +25,7 @@ public class SendRequestTests
     private readonly IWorkspaceStateStore _state = Substitute.For<IWorkspaceStateStore>();
     private readonly CurrentWorkspace _current = new();
     private readonly ICookieJarStore _cookies = Substitute.For<ICookieJarStore>();
+    private readonly ICapturedValueStore _captures = Substitute.For<ICapturedValueStore>();
     private readonly ResponseBodies _bodies = new();
     private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
 
@@ -40,10 +41,15 @@ public class SendRequestTests
         _secrets.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
                 new Dictionary<string, IReadOnlyDictionary<string, string>>()));
+        _captures.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                new Dictionary<string, IReadOnlyDictionary<string, string>>()));
+        _captures.SaveAsync(Arg.Any<string>(), Arg.Any<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>(), Arg.Any<CancellationToken>())
+            .Returns(Unit.Value);
     }
 
     private SendRequest CreateSendRequest() =>
-        new(_sender, _inFlight, new ActiveEnvironment(_environments, _secrets, _state, _current), _bodies, _cookies, _current, _time);
+        new(_sender, _inFlight, new ActiveEnvironment(_environments, _secrets, _captures, _state, _current), _bodies, _cookies, _captures, _current, _time);
 
     /// <summary>Opens a workspace with <paramref name="environment"/> selected as <c>dev.yaml</c>.</summary>
     private void SelectEnvironment(EnvironmentDefinition environment, Dictionary<string, string>? secrets = null)
@@ -429,6 +435,86 @@ public class SendRequestTests
         await _cookies.Received(1).SaveAsync(
             Root,
             Arg.Is<Jars>(j => j["dev.yaml"].SequenceEqual(new[] { fresh })),
+            Arg.Any<CancellationToken>());
+    }
+
+    private static readonly IReadOnlyList<CaptureDto> TokenCaptures =
+        [new CaptureDto("token", "$.access_token"), new CaptureDto("etag", "header:ETag"), new CaptureDto("missing", "$.nope")];
+
+    private static HttpResponseData LoginResponse(int status = 200) =>
+        Response("""{"access_token":"t0k"}""", status: status) with
+        {
+            Headers = [KeyValuePair.Create("Content-Type", "application/json"), KeyValuePair.Create("ETag", "\"v1\"")],
+        };
+
+    [Fact]
+    public async Task Execute_StoresCapturedValuesForTheSelectedEnvironment()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(LoginResponse());
+        SelectEnvironment(new EnvironmentDefinition("Development"));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request() with { Captures = TokenCaptures });
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        Assert.Equal(
+            ["token=t0k", "etag=\"v1\"", "missing=!$.nope matches nothing in the response."],
+            result.Value.Captures!.Select(c => $"{c.Variable}={c.Value ?? "!" + c.Error}"));
+        await _captures.Received(1).SaveAsync(
+            Root,
+            Arg.Is<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>(v =>
+                v["dev.yaml"].Count == 2 && v["dev.yaml"]["token"] == "t0k" && v["dev.yaml"]["etag"] == "\"v1\""),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_CapturesNothingFromUnsuccessfulResponses()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(LoginResponse(401));
+        SelectEnvironment(new EnvironmentDefinition("Development"));
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request() with { Captures = TokenCaptures });
+
+        Assert.All(result.Value.Captures!, c => Assert.Contains("401", c.Error));
+        Assert.All(result.Value.Captures!, c => Assert.Null(c.Value));
+        await _captures.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Execute_WithoutEnvironment_StoresNoCapturedValues()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(LoginResponse());
+        _current.Open(Root);
+
+        var result = await CreateSendRequest().ExecuteAsync("1", Request() with { Captures = TokenCaptures });
+
+        var token = result.Value.Captures![0];
+        Assert.Null(token.Value);
+        Assert.Contains("no environment is selected", token.Error);
+        await _captures.DidNotReceiveWithAnyArgs().SaveAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task Execute_CapturedValuesTakePrecedenceOverTheEnvironment()
+    {
+        _sender.SendAsync(Arg.Any<OutgoingRequest>(), Arg.Any<CancellationToken>()).Returns(Response(""));
+        SelectEnvironment(new EnvironmentDefinition("Development", [
+            new EnvironmentVariable("token", "placeholder"),
+            new EnvironmentVariable("session", "", Secret: true),
+        ]));
+        _captures.LoadAsync(Root, Arg.Any<CancellationToken>())
+            .Returns(Result<IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>>.Success(
+                new Dictionary<string, IReadOnlyDictionary<string, string>>
+                {
+                    ["dev.yaml"] = new Dictionary<string, string> { ["token"] = "fresh", ["session"] = "s1" },
+                }));
+        var request = Request(url: "https://api.example.com/{{session}}") with { Auth = new AuthDto("bearer", Token: "{{token}}") };
+
+        var result = await CreateSendRequest().ExecuteAsync("1", request);
+
+        Assert.True(result.IsSuccess, result.Error?.Message);
+        await _sender.Received(1).SendAsync(
+            Arg.Is<OutgoingRequest>(r =>
+                r.Url.AbsolutePath == "/s1" && r.Headers.Contains(KeyValuePair.Create("Authorization", "Bearer fresh"))),
             Arg.Any<CancellationToken>());
     }
 }

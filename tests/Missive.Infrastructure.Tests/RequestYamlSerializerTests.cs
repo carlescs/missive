@@ -57,6 +57,33 @@ public class RequestYamlSerializerTests
     }
 
     [Fact]
+    public void Captures_AreWrittenAfterTheBodyAndReadBack()
+    {
+        var request = new HttpRequestDefinition("Log in", RequestMethod.Post, "/login")
+        {
+            Captures = [new CaptureRule("token", "$.access_token"), new CaptureRule("etag", "header:ETag")],
+            Description = "Logs in.",
+        };
+
+        var yaml = RequestYamlSerializer.Serialize(request);
+
+        Assert.Equal(
+            """
+            name: Log in
+            method: POST
+            url: /login
+            capture:
+              token: $.access_token
+              etag: header:ETag
+            description: Logs in.
+
+            """.ReplaceLineEndings("\n"),
+            yaml);
+        Assert.Equal(request.Captures, RequestYamlSerializer.Deserialize(yaml, "x").Captures);
+        Assert.Throws<RequestFormatException>(() => RequestYamlSerializer.Deserialize("capture: [a]\n", "x"));
+    }
+
+    [Fact]
     public void Serialize_WritesTheDescriptionLastAsABlock()
     {
         var request = new HttpRequestDefinition("Get user", RequestMethod.Get, "/users/1", body: new RequestBody(BodyType.Text, "x"))
